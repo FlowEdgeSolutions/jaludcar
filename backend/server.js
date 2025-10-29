@@ -1,5 +1,4 @@
 const express = require('express');
-const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
@@ -97,11 +96,47 @@ const upload = multer({
 
 // MongoDB Connection
 // Support both MONGODB_URI and jaludcar_MONGODB_URI (Vercel integration)
-const MONGODB_URI = process.env.jaludcar_MONGODB_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/jalud-leads';
+let MONGODB_URI = process.env.jaludcar_MONGODB_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/jalud-leads';
 
-mongoose.connect(MONGODB_URI)
-.then(() => console.log('✅ MongoDB verbunden'))
-.catch(err => console.error('❌ MongoDB Verbindungsfehler:', err));
+// Ensure database name is always included in the URI
+if (MONGODB_URI && !MONGODB_URI.includes('/jalud-leads')) {
+  // If URI doesn't have a database name, add it before query params
+  MONGODB_URI = MONGODB_URI.replace(/\/\?/, '/jalud-leads?');
+  // If no query params exist, add database name at the end
+  if (!MONGODB_URI.includes('?')) {
+    MONGODB_URI = MONGODB_URI.replace(/\/$/, '') + '/jalud-leads';
+  }
+  // Add appName if missing
+  if (!MONGODB_URI.includes('appName=')) {
+    MONGODB_URI += (MONGODB_URI.includes('?') ? '&' : '?') + 'appName=jaludcarmongodb';
+  }
+}
+
+let isMongoConnected = false;
+
+// Connect to MongoDB with better error handling for serverless
+async function connectToDatabase() {
+  if (isMongoConnected) {
+    return Promise.resolve();
+  }
+  
+  try {
+    await mongoose.connect(MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45000,
+    });
+    isMongoConnected = true;
+    console.log('✅ MongoDB verbunden');
+  } catch (err) {
+    console.error('❌ MongoDB Verbindungsfehler:', err);
+    throw err;
+  }
+}
+
+// Initialize connection
+connectToDatabase().catch(err => {
+  console.error('❌ Initiale MongoDB-Verbindung fehlgeschlagen:', err.message);
+});
 
 // Lead Schema
 const leadSchema = new mongoose.Schema({
@@ -310,6 +345,9 @@ function getAdminEmailTemplate(lead) {
 // POST - Create new lead
 app.post('/api/leads', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const { firstName, lastName, phone, email, package: pkg, message } = req.body;
     
     // Validation
@@ -374,6 +412,9 @@ app.post('/api/leads', async (req, res) => {
 // GET - Get all leads (Admin)
 app.get('/api/leads', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const { status, sortBy = 'createdAt', order = 'desc' } = req.query;
     
     const filter = {};
@@ -399,6 +440,9 @@ app.get('/api/leads', async (req, res) => {
 // GET - Get single lead
 app.get('/api/leads/:id', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const lead = await Lead.findById(req.params.id);
     
     if (!lead) {
@@ -424,6 +468,9 @@ app.get('/api/leads/:id', async (req, res) => {
 // PUT - Update lead
 app.put('/api/leads/:id', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const { status, notes } = req.body;
     
     const updateData = {};
@@ -461,6 +508,9 @@ app.put('/api/leads/:id', async (req, res) => {
 // DELETE - Delete lead
 app.delete('/api/leads/:id', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const lead = await Lead.findByIdAndDelete(req.params.id);
     
     if (!lead) {
@@ -486,6 +536,9 @@ app.delete('/api/leads/:id', async (req, res) => {
 // GET - Statistics
 app.get('/api/stats', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const totalLeads = await Lead.countDocuments();
     const neuLeads = await Lead.countDocuments({ status: 'neu' });
     const kontaktiertLeads = await Lead.countDocuments({ status: 'kontaktiert' });
@@ -729,6 +782,9 @@ app.post('/api/blog/upload-image', upload.single('image'), (req, res) => {
 // POST - Create blog post
 app.post('/api/blog/posts', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const postData = req.body;
     
     const blogPost = new BlogPost(postData);
@@ -751,6 +807,9 @@ app.post('/api/blog/posts', async (req, res) => {
 // GET - Get all blog posts
 app.get('/api/blog/posts', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const { status, category, sortBy = 'createdAt', order = 'desc' } = req.query;
     
     const filter = {};
@@ -777,6 +836,9 @@ app.get('/api/blog/posts', async (req, res) => {
 // GET - Get published blog posts (for frontend)
 app.get('/api/blog/posts/published', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const posts = await BlogPost.find({ status: 'published' })
       .sort({ publishedAt: -1 })
       .select('-fullContent');
@@ -805,6 +867,9 @@ app.get('/api/blog/posts/published', async (req, res) => {
 // GET - Get single blog post by ID
 app.get('/api/blog/posts/:id', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const post = await BlogPost.findById(req.params.id);
     
     if (!post) {
@@ -830,6 +895,9 @@ app.get('/api/blog/posts/:id', async (req, res) => {
 // GET - Get blog post by slug (for frontend)
 app.get('/api/blog/posts/slug/:slug', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const post = await BlogPost.findOne({ 
       slug: req.params.slug,
       status: 'published'
@@ -858,6 +926,9 @@ app.get('/api/blog/posts/slug/:slug', async (req, res) => {
 // PUT - Update blog post
 app.put('/api/blog/posts/:id', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const updateData = { ...req.body, updatedAt: Date.now() };
     
     if (updateData.status === 'published' && !updateData.publishedAt) {
@@ -894,6 +965,9 @@ app.put('/api/blog/posts/:id', async (req, res) => {
 // DELETE - Delete blog post
 app.delete('/api/blog/posts/:id', async (req, res) => {
   try {
+    // Ensure MongoDB connection
+    await connectToDatabase();
+    
     const post = await BlogPost.findByIdAndDelete(req.params.id);
     
     if (!post) {
