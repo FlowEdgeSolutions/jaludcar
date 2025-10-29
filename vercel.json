@@ -1,5 +1,5 @@
 {
-  "buildCommand": "cd flowedge-app && npm install && npm run build",
+  "buildCommand": "cd flowedge-app && npm install && npm run build:vercel",
   "outputDirectory": "flowedge-app/dist/flowedge-app/browser",
   "rewrites": [
     {

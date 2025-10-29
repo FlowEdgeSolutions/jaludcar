@@ -872,8 +872,8 @@ app.get('/health', (req, res) => {
 // Export for Vercel Serverless
 module.exports = app;
 
-// Start server only in development
-if (process.env.NODE_ENV !== 'production') {
+// Start server only in development and when not in Vercel environment
+if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`🚀 Server läuft auf Port ${PORT}`);
   });
