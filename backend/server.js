@@ -5,7 +5,6 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const nodemailer = require('nodemailer');
 
 // Try to import Vercel functions, but don't fail if not available
 let attachDatabasePool;
@@ -231,149 +230,6 @@ leadSchema.pre('save', function(next) {
 
 const Lead = mongoose.model('Lead', leadSchema);
 
-// Email Configuration
-let emailTransporter = null;
-if (config.email && config.email.user && config.email.password && config.email.password !== 'IHR_EMAIL_PASSWORT_HIER') {
-  const transportConfig = config.email.service ? {
-    service: config.email.service,
-    auth: {
-      user: config.email.user,
-      pass: config.email.password
-    }
-  } : {
-    host: config.email.host,
-    port: config.email.port,
-    secure: config.email.secure,
-    auth: {
-      user: config.email.user,
-      pass: config.email.password
-    }
-  };
-  
-  emailTransporter = nodemailer.createTransport(transportConfig);
-  console.log('✅ E-Mail-Service konfiguriert');
-} else {
-  console.log('⚠️  E-Mail-Service nicht konfiguriert. Bitte config.json aktualisieren.');
-}
-
-// Email Templates
-function getCustomerEmailTemplate(lead) {
-  const packageNames = {
-    'basic': 'Basic-Package',
-    'premium': 'Premium-Package',
-    'luxus': 'Luxus-Package',
-    'beratung': 'Individuelle Beratung'
-  };
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #000; color: white; padding: 30px; text-align: center; }
-    .content { padding: 30px; background: #f9f9f9; }
-    .footer { background: #000; color: white; padding: 20px; text-align: center; font-size: 12px; }
-    .button { display: inline-block; padding: 12px 30px; background: #000; color: white; text-decoration: none; margin: 20px 0; }
-    .info-box { background: white; padding: 20px; margin: 20px 0; border-left: 4px solid #000; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h1>JALUD Premium Autopflege</h1>
-    </div>
-    <div class="content">
-      <h2>Vielen Dank für Ihre Anfrage!</h2>
-      <p>Hallo ${lead.firstName} ${lead.lastName},</p>
-      <p>vielen Dank für Ihr Interesse an unseren Premium-Autopflege-Leistungen. Wir haben Ihre Anfrage erhalten und werden uns in Kürze bei Ihnen melden.</p>
-      
-      <div class="info-box">
-        <h3>Ihre Anfrage im Überblick:</h3>
-        <p><strong>Paket:</strong> ${packageNames[lead.package]}</p>
-        <p><strong>Name:</strong> ${lead.firstName} ${lead.lastName}</p>
-        <p><strong>E-Mail:</strong> ${lead.email}</p>
-        <p><strong>Telefon:</strong> ${lead.phone}</p>
-        ${lead.message ? `<p><strong>Ihre Nachricht:</strong><br>${lead.message}</p>` : ''}
-      </div>
-
-      <p>Unser Team wird Ihre Anfrage prüfen und sich innerhalb von 24 Stunden bei Ihnen melden.</p>
-      
-      <p>Bei dringenden Fragen erreichen Sie uns unter:</p>
-      <p><strong>📞 +49 155 636 538 36</strong><br>
-         <strong>📧 info@jalud.de</strong></p>
-
-      <p>Wir freuen uns darauf, Ihr Fahrzeug zum Strahlen zu bringen!</p>
-      
-      <p>Mit freundlichen Grüßen,<br>
-         Ihr JALUD-Team</p>
-    </div>
-    <div class="footer">
-      <p>JALUD Premium Autopflege<br>
-         Auf dem Haidchen 45, 45527 Hattingen<br>
-         Tel: +49 155 636 538 36 | E-Mail: info@jalud.de</p>
-    </div>
-  </div>
-</body>
-</html>
-  `;
-}
-
-function getAdminEmailTemplate(lead) {
-  const packageNames = {
-    'basic': 'Basic-Package',
-    'premium': 'Premium-Package',
-    'luxus': 'Luxus-Package',
-    'beratung': 'Individuelle Beratung'
-  };
-
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <style>
-    body { font-family: 'Arial', sans-serif; line-height: 1.6; color: #333; }
-    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-    .header { background: #000; color: white; padding: 20px; }
-    .content { padding: 20px; background: #f9f9f9; }
-    .lead-info { background: white; padding: 15px; margin: 10px 0; border-left: 4px solid #000; }
-    .status-badge { display: inline-block; padding: 5px 15px; background: #4CAF50; color: white; border-radius: 3px; }
-  </style>
-</head>
-<body>
-  <div class="container">
-    <div class="header">
-      <h2>🔔 Neue Lead-Anfrage</h2>
-    </div>
-    <div class="content">
-      <p><span class="status-badge">NEU</span></p>
-      
-      <div class="lead-info">
-        <h3>Kontaktdaten:</h3>
-        <p><strong>Name:</strong> ${lead.firstName} ${lead.lastName}</p>
-        <p><strong>E-Mail:</strong> <a href="mailto:${lead.email}">${lead.email}</a></p>
-        <p><strong>Telefon:</strong> <a href="tel:${lead.phone}">${lead.phone}</a></p>
-        <p><strong>Gewünschtes Paket:</strong> ${packageNames[lead.package]}</p>
-        ${lead.message ? `<p><strong>Nachricht:</strong><br>${lead.message}</p>` : '<p><em>Keine Nachricht hinterlassen</em></p>'}
-        <p><strong>Eingegangen am:</strong> ${new Date(lead.createdAt).toLocaleString('de-DE')}</p>
-      </div>
-
-      <p><strong>Nächste Schritte:</strong></p>
-      <ul>
-        <li>Kunde innerhalb von 24 Stunden kontaktieren</li>
-        <li>Lead im Admin-Dashboard bearbeiten</li>
-        <li>Termin vereinbaren</li>
-      </ul>
-
-      <p><a href="http://localhost:4200/admin" style="display: inline-block; padding: 12px 30px; background: #000; color: white; text-decoration: none;">Zum Admin-Dashboard</a></p>
-    </div>
-  </div>
-</body>
-</html>
-  `;
-}
-
 // Routes
 
 // POST - Create new lead
@@ -404,34 +260,6 @@ app.post('/api/leads', async (req, res) => {
     await lead.save();
     console.log('✅ Lead gespeichert:', lead._id);
     
-    // Send emails if configured (non-blocking)
-    if (emailTransporter) {
-      // Don't await - send emails in background
-      emailTransporter.sendMail({
-        from: config.email.from,
-        to: email,
-        subject: 'Bestätigung Ihrer Anfrage - JALUD Premium Autopflege',
-        html: getCustomerEmailTemplate(lead)
-      }).then(() => {
-        console.log(`✅ Bestätigungs-E-Mail an ${email} gesendet`);
-      }).catch(emailError => {
-        console.error('⚠️  E-Mail-Fehler (Kunde):', emailError.message);
-      });
-
-      emailTransporter.sendMail({
-        from: config.email.from,
-        to: config.email.adminEmail,
-        subject: `🔔 Neue Lead-Anfrage von ${firstName} ${lastName}`,
-        html: getAdminEmailTemplate(lead)
-      }).then(() => {
-        console.log(`✅ Benachrichtigung an ${config.email.adminEmail} gesendet`);
-      }).catch(emailError => {
-        console.error('⚠️  E-Mail-Fehler (Admin):', emailError.message);
-      });
-    } else {
-      console.log('⚠️  E-Mails übersprungen - Service nicht konfiguriert');
-    }
-    
     // Return success immediately after saving lead
     res.status(201).json({ 
       success: true, 
@@ -442,8 +270,7 @@ app.post('/api/leads', async (req, res) => {
     console.error('❌ Fehler beim Erstellen des Leads:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Serverfehler beim Speichern der Anfrage',
-      error: error.message
+      message: 'Serverfehler beim Speichern der Anfrage'
     });
   }
 });
