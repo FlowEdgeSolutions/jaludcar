@@ -6,9 +6,16 @@ const bodyParser = require('body-parser');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const { AzureOpenAI } = require('openai');
 const nodemailer = require('nodemailer');
 require('dotenv').config();
+
+// Optional: Azure OpenAI (nur für Blog-Generierung)
+let AzureOpenAI;
+try {
+  AzureOpenAI = require('openai').AzureOpenAI;
+} catch (e) {
+  console.log('⚠️  Azure OpenAI nicht verfügbar (nur für Blog-Generierung benötigt)');
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -598,16 +605,20 @@ const BlogPost = mongoose.model('BlogPost', blogPostSchema);
 
 // Initialize Azure OpenAI Client
 let azureOpenAI = null;
-if (config.azureOpenAI.apiKey && config.azureOpenAI.apiKey !== 'YOUR_API_KEY_HERE') {
-  azureOpenAI = new AzureOpenAI({
-    apiKey: config.azureOpenAI.apiKey,
-    endpoint: config.azureOpenAI.endpoint,
-    apiVersion: config.azureOpenAI.apiVersion,
-    deployment: config.azureOpenAI.deploymentName
-  });
-  console.log('✅ Azure OpenAI konfiguriert');
+if (AzureOpenAI && config.azureOpenAI.apiKey && config.azureOpenAI.apiKey !== 'YOUR_API_KEY_HERE') {
+  try {
+    azureOpenAI = new AzureOpenAI({
+      apiKey: config.azureOpenAI.apiKey,
+      endpoint: config.azureOpenAI.endpoint,
+      apiVersion: config.azureOpenAI.apiVersion,
+      deployment: config.azureOpenAI.deploymentName
+    });
+    console.log('✅ Azure OpenAI konfiguriert');
+  } catch (e) {
+    console.log('⚠️  Azure OpenAI konnte nicht initialisiert werden:', e.message);
+  }
 } else {
-  console.log('⚠️  Azure OpenAI nicht konfiguriert. Bitte API-Key in config.json hinzufügen.');
+  console.log('⚠️  Azure OpenAI nicht konfiguriert (nur für Blog-Generierung benötigt).');
 }
 
 // POST - Generate blog post with Azure OpenAI
