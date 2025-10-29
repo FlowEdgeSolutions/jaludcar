@@ -6,6 +6,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
+const { attachDatabasePool } = require('@vercel/functions');
 require('dotenv').config();
 
 // Optional: Azure OpenAI (nur für Blog-Generierung)
@@ -100,23 +101,33 @@ let MONGODB_URI = process.env.jaludcar_MONGODB_URI || process.env.MONGODB_URI ||
 
 // Ensure database name is always included in the URI
 if (MONGODB_URI && !MONGODB_URI.includes('/jalud-leads')) {
-  // If URI doesn't have a database name, add it before query params
+  // Add database name before query params
   MONGODB_URI = MONGODB_URI.replace(/\/\?/, '/jalud-leads?');
-  // If no query params exist, add database name at the end
+  // If no query params, add at the end
   if (!MONGODB_URI.includes('?')) {
     MONGODB_URI = MONGODB_URI.replace(/\/$/, '') + '/jalud-leads';
   }
-  // Add appName if missing
-  if (!MONGODB_URI.includes('appName=')) {
-    MONGODB_URI += (MONGODB_URI.includes('?') ? '&' : '?') + 'appName=jaludcarmongodb';
-  }
 }
 
-let isMongoConnected = false;
+// Ensure required parameters are present
+if (!MONGODB_URI.includes('retryWrites=')) {
+  MONGODB_URI += (MONGODB_URI.includes('?') ? '&' : '?') + 'retryWrites=true';
+}
+if (!MONGODB_URI.includes('w=majority')) {
+  MONGODB_URI += '&w=majority';
+}
+if (!MONGODB_URI.includes('appName=')) {
+  MONGODB_URI += '&appName=jaludcarmongodb';
+}
 
-// Connect to MongoDB with better error handling for serverless
+console.log('📊 MongoDB URI configured (database: jalud-leads)');
+
+let isMongoConnected = false;
+let mongoClient = null;
+
+// Connect to MongoDB with Vercel optimization
 async function connectToDatabase() {
-  if (isMongoConnected) {
+  if (isMongoConnected && mongoose.connection.readyState === 1) {
     return Promise.resolve();
   }
   
@@ -125,10 +136,19 @@ async function connectToDatabase() {
       serverSelectionTimeoutMS: 5000,
       socketTimeoutMS: 45000,
     });
+    
+    // Attach database pool for Vercel Functions
+    if (mongoose.connection.getClient) {
+      mongoClient = mongoose.connection.getClient();
+      attachDatabasePool(mongoClient);
+      console.log('✅ Vercel Database Pool attached');
+    }
+    
     isMongoConnected = true;
     console.log('✅ MongoDB verbunden');
   } catch (err) {
-    console.error('❌ MongoDB Verbindungsfehler:', err);
+    console.error('❌ MongoDB Verbindungsfehler:', err.message);
+    isMongoConnected = false;
     throw err;
   }
 }
