@@ -12,7 +12,7 @@ import { ViewChild, ElementRef } from '@angular/core';
 })
 export class Home {
   title = 'JALUD';
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = '/api';
   
   @ViewChild('videoPlayer') videoPlayer!: ElementRef<HTMLIFrameElement>;
   videoPlaying = false;

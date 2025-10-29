@@ -3,12 +3,12 @@
   "outputDirectory": "flowedge-app/dist/flowedge-app/browser",
   "rewrites": [
     {
-      "source": "/api/(.*)",
-      "destination": "/api/backend"
+      "source": "/api/:path*",
+      "destination": "/api/index"
     }
   ],
   "functions": {
-    "api/backend.js": {
+    "api/index.js": {
       "memory": 1024,
       "maxDuration": 10
     }
