@@ -88,7 +88,8 @@ const upload = multer({
 });
 
 // MongoDB Connection
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/jalud-leads';
+// Support both MONGODB_URI and jaludcar_MONGODB_URI (Vercel integration)
+const MONGODB_URI = process.env.jaludcar_MONGODB_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/jalud-leads';
 
 mongoose.connect(MONGODB_URI)
 .then(() => console.log('✅ MongoDB verbunden'))
