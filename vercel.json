@@ -1,29 +1,16 @@
 {
-  "version": 2,
-  "name": "jalud-autopflege",
   "buildCommand": "cd flowedge-app && npm install && npm run build",
   "outputDirectory": "flowedge-app/dist/flowedge-app/browser",
-  "builds": [
+  "rewrites": [
     {
-      "src": "backend/server.js",
-      "use": "@vercel/node"
+      "source": "/api/(.*)",
+      "destination": "/api/backend"
     }
   ],
-  "routes": [
-    {
-      "src": "/api/(.*)",
-      "dest": "/backend/server.js"
-    },
-    {
-      "src": "/uploads/(.*)",
-      "dest": "/backend/server.js"
-    },
-    {
-      "handle": "filesystem"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
+  "functions": {
+    "api/backend.js": {
+      "memory": 1024,
+      "maxDuration": 10
     }
-  ]
+  }
 }

@@ -916,7 +916,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server läuft' });
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server läuft auf Port ${PORT}`);
-});
+// Export for Vercel Serverless
+module.exports = app;
+
+// Start server only in development
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server läuft auf Port ${PORT}`);
+  });
+}
