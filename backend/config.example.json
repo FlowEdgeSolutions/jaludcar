@@ -1,0 +1,21 @@
+{
+  "azureOpenAI": {
+    "endpoint": "YOUR_AZURE_ENDPOINT",
+    "apiKey": "YOUR_API_KEY_HERE",
+    "deploymentName": "gpt-4.1_jalud_blog",
+    "apiVersion": "2025-01-01-preview"
+  },
+  "blog": {
+    "imagesPath": "public/images/blog",
+    "postsPath": "backend/data/blog-posts.json"
+  },
+  "email": {
+    "host": "smtp.strato.de",
+    "port": 465,
+    "secure": true,
+    "user": "YOUR_EMAIL@jalud.de",
+    "password": "YOUR_EMAIL_PASSWORD",
+    "from": "JALUD Premium Autopflege <YOUR_EMAIL@jalud.de>",
+    "adminEmail": "YOUR_EMAIL@jalud.de"
+  }
+}

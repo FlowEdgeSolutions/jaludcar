@@ -1,0 +1,98 @@
+<!-- Navigation (wiederholt) -->
+<nav class="navbar">
+  <div class="nav-container">
+    <div class="logo">
+      <a href="/">
+        <img src="/logojalud.png" alt="JALUD Logo" class="logo-img">
+      </a>
+    </div>
+    <ul class="nav-menu">
+      <li><a href="/#ueber-jalud">Über JALUD</a></li>
+      <li><a href="/#leistungen">Unsere Leistungen</a></li>
+      <li><a href="/#preise">Preise</a></li>
+      <li><a href="/blog">Blog</a></li>
+      <li><a href="/#kontakt">Kontakt</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Blog Header -->
+<section class="blog-header">
+  <div class="blog-header-content">
+    <h1>JALUD Blog</h1>
+    <p>Expertenwissen rund um Premium Autopflege</p>
+  </div>
+</section>
+
+<!-- Blog Posts Grid -->
+<section class="blog-section">
+  <div class="blog-container">
+    <div class="blog-grid">
+      <article class="blog-card" *ngFor="let post of blogPosts">
+        <div class="blog-image">
+          <img [src]="post.image" [alt]="post.title">
+          <span class="blog-category">{{ post.category }}</span>
+        </div>
+        <div class="blog-content">
+          <time class="blog-date">{{ post.date }}</time>
+          <h2 class="blog-title">{{ post.title }}</h2>
+          <p class="blog-excerpt">{{ post.excerpt }}</p>
+          <a [href]="'/blog/' + post.id" class="read-more">Weiterlesen →</a>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-column footer-brand">
+      <a href="/">
+        <img src="/logojaludweiss.png" alt="JALUD Logo" class="footer-logo">
+      </a>
+      <p>Premium Autopflege in Hattingen</p>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Unsere Leistungen</h4>
+      <ul>
+        <li><a href="/#leistungen">Innenreinigung</a></li>
+        <li><a href="/#leistungen">Außenreinigung</a></li>
+        <li><a href="/#leistungen">Lackaufbereitung</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Preise</h4>
+      <ul>
+        <li><a href="/#preise">Basic-Package</a></li>
+        <li><a href="/#preise">Premium-Package</a></li>
+        <li><a href="/#preise">Luxus-Package</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Rechtliches</h4>
+      <ul>
+        <li><a href="/impressum">Impressum</a></li>
+        <li><a href="/datenschutz">Datenschutz</a></li>
+        <li><a href="/agb">AGB</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Kontakt</h4>
+      <p><a href="tel:+4915563653836">+49 155 636 538 36</a></p>
+      <p><a href="mailto:info@jalud.de">info@jalud.de</a></p>
+      <p class="footer-address">
+        Auf dem Haidchen 45<br>
+        45527 Hattingen
+      </p>
+    </div>
+  </div>
+  
+  <div class="footer-bottom">
+    <p>© 2025 JALUD. Alle Rechte vorbehalten.</p>
+  </div>
+</footer>

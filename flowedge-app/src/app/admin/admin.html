@@ -1,0 +1,476 @@
+<!-- Admin Dashboard -->
+<div class="admin-container">
+  <header class="admin-header">
+    <div class="header-content">
+      <h1>JALUD Admin Dashboard</h1>
+      <a href="/" class="back-home">← Zur Website</a>
+    </div>
+  </header>
+
+  <!-- Tab Navigation -->
+  <nav class="tab-navigation">
+    <button 
+      class="tab-btn" 
+      [class.active]="activeTab === 'leads'"
+      (click)="switchTab('leads')">
+      📊 Leads
+    </button>
+    <button 
+      class="tab-btn" 
+      [class.active]="activeTab === 'blog'"
+      (click)="switchTab('blog')">
+      ✍️ Blog
+    </button>
+  </nav>
+
+  <!-- Messages -->
+  <div class="message success" *ngIf="successMessage">
+    {{ successMessage }}
+  </div>
+  <div class="message error" *ngIf="error">
+    {{ error }}
+  </div>
+
+  <!-- LEADS TAB -->
+  <div *ngIf="activeTab === 'leads'">
+
+  <!-- Statistics -->
+  <section class="stats-section">
+    <div class="stat-card">
+      <div class="stat-icon">📊</div>
+      <div class="stat-info">
+        <h3>{{ stats.total }}</h3>
+        <p>Gesamt Leads</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">🆕</div>
+      <div class="stat-info">
+        <h3>{{ stats.neu }}</h3>
+        <p>Neue Leads</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">📞</div>
+      <div class="stat-info">
+        <h3>{{ stats.kontaktiert }}</h3>
+        <p>Kontaktiert</p>
+      </div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-icon">✅</div>
+      <div class="stat-info">
+        <h3>{{ stats.abgeschlossen }}</h3>
+        <p>Abgeschlossen</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Filters -->
+  <section class="filters-section">
+    <div class="filter-group">
+      <label>Status Filter:</label>
+      <select [(ngModel)]="filterStatus" (change)="onFilterChange()">
+        <option value="all">Alle</option>
+        <option value="neu">Neu</option>
+        <option value="kontaktiert">Kontaktiert</option>
+        <option value="abgeschlossen">Abgeschlossen</option>
+        <option value="abgelehnt">Abgelehnt</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label>Suche:</label>
+      <input 
+        type="text" 
+        [(ngModel)]="searchTerm" 
+        (input)="onFilterChange()"
+        placeholder="Name, Email, Telefon...">
+    </div>
+    <button class="refresh-btn" (click)="loadLeads()">🔄 Aktualisieren</button>
+  </section>
+
+  <!-- Messages -->
+  <div class="message success" *ngIf="successMessage">
+    {{ successMessage }}
+  </div>
+  <div class="message error" *ngIf="error">
+    {{ error }}
+  </div>
+
+  <!-- Loading -->
+  <div class="loading" *ngIf="loading && !selectedLead && !showBlogEditor">
+    <div class="spinner"></div>
+    <p>Lade Daten...</p>
+  </div>
+
+  <!-- Leads Table -->
+  <section class="leads-section" *ngIf="!loading || selectedLead">
+    <h2>Leads ({{ filteredLeads.length }})</h2>
+    
+    <div class="table-responsive" *ngIf="filteredLeads.length > 0">
+      <table class="leads-table">
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Name</th>
+            <th>Kontakt</th>
+            <th>Paket</th>
+            <th>Status</th>
+            <th>Aktionen</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let lead of filteredLeads">
+            <td>{{ formatDate(lead.createdAt) }}</td>
+            <td>{{ lead.firstName }} {{ lead.lastName }}</td>
+            <td>
+              <div class="contact-info">
+                <a [href]="'tel:' + lead.phone">{{ lead.phone }}</a>
+                <a [href]="'mailto:' + lead.email">{{ lead.email }}</a>
+              </div>
+            </td>
+            <td>{{ getPackageName(lead.package) }}</td>
+            <td>
+              <span class="status-badge" [style.background-color]="getStatusColor(lead.status)">
+                {{ lead.status }}
+              </span>
+            </td>
+            <td>
+              <div class="action-buttons">
+                <button class="btn-view" (click)="selectLead(lead)">👁️ Ansehen</button>
+                <button class="btn-delete" (click)="deleteLead(lead._id)">🗑️</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="no-results" *ngIf="filteredLeads.length === 0 && !loading">
+      <p>Keine Leads gefunden</p>
+    </div>
+  </section>
+
+  <!-- Lead Details Modal -->
+  <div class="modal-overlay" *ngIf="selectedLead" (click)="closeModal()">
+    <div class="modal-content" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <h2>Lead Details</h2>
+        <button class="close-btn" (click)="closeModal()">✕</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="detail-group">
+          <label>Name:</label>
+          <p>{{ selectedLead.firstName }} {{ selectedLead.lastName }}</p>
+        </div>
+
+        <div class="detail-row">
+          <div class="detail-group">
+            <label>Telefon:</label>
+            <p><a [href]="'tel:' + selectedLead.phone">{{ selectedLead.phone }}</a></p>
+          </div>
+          <div class="detail-group">
+            <label>Email:</label>
+            <p><a [href]="'mailto:' + selectedLead.email">{{ selectedLead.email }}</a></p>
+          </div>
+        </div>
+
+        <div class="detail-group">
+          <label>Paket:</label>
+          <p>{{ getPackageName(selectedLead.package) }}</p>
+        </div>
+
+        <div class="detail-group" *ngIf="selectedLead.message">
+          <label>Nachricht:</label>
+          <p class="message-text">{{ selectedLead.message }}</p>
+        </div>
+
+        <div class="detail-group">
+          <label>Erstellt am:</label>
+          <p>{{ formatDate(selectedLead.createdAt) }}</p>
+        </div>
+
+        <div class="detail-group">
+          <label>Status:</label>
+          <select [(ngModel)]="selectedLead.status" class="status-select">
+            <option value="neu">Neu</option>
+            <option value="kontaktiert">Kontaktiert</option>
+            <option value="abgeschlossen">Abgeschlossen</option>
+            <option value="abgelehnt">Abgelehnt</option>
+          </select>
+        </div>
+
+        <div class="detail-group">
+          <label>Notizen:</label>
+          <textarea 
+            [(ngModel)]="selectedLead.notes" 
+            rows="4" 
+            placeholder="Interne Notizen..."></textarea>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn-cancel" (click)="closeModal()">Abbrechen</button>
+        <button class="btn-save" (click)="updateLead()" [disabled]="loading">
+          {{ loading ? 'Speichere...' : 'Speichern' }}
+        </button>
+      </div>
+    </div>
+  </div>
+  </div>
+  <!-- END LEADS TAB -->
+
+  <!-- BLOG TAB -->
+  <div *ngIf="activeTab === 'blog'">
+    
+    <!-- Blog Controls -->
+    <section class="blog-controls">
+      <button class="btn-new-post" (click)="newBlogPost()">
+        ➕ Neuer Beitrag
+      </button>
+      
+      <div class="blog-filters">
+        <div class="filter-group">
+          <label>Status:</label>
+          <select [(ngModel)]="blogFilterStatus" (change)="onBlogFilterChange()">
+            <option value="all">Alle</option>
+            <option value="draft">Entwurf</option>
+            <option value="published">Veröffentlicht</option>
+            <option value="archived">Archiviert</option>
+          </select>
+        </div>
+        <div class="filter-group">
+          <label>Suche:</label>
+          <input 
+            type="text" 
+            [(ngModel)]="blogSearchTerm" 
+            (input)="onBlogFilterChange()"
+            placeholder="Titel, Kategorie...">
+        </div>
+        <button class="refresh-btn" (click)="loadBlogPosts()">🔄 Aktualisieren</button>
+      </div>
+    </section>
+
+    <!-- Blog Posts Grid -->
+    <section class="blog-posts-grid" *ngIf="!loading && !showBlogEditor">
+      <div class="blog-post-card" *ngFor="let post of filteredPosts">
+        <div class="post-image" *ngIf="post.image">
+          <img [src]="'http://localhost:3000' + post.image" [alt]="post.title">
+        </div>
+        <div class="post-content">
+          <span class="post-status-badge" [style.background-color]="getPostStatusColor(post.status)">
+            {{ post.status }}
+          </span>
+          <h3>{{ post.title }}</h3>
+          <p class="post-category">📁 {{ post.category }}</p>
+          <p class="post-excerpt">{{ post.excerpt }}</p>
+          <p class="post-meta">
+            <span *ngIf="post.aiGenerated">🤖 AI-generiert</span>
+            <span>{{ formatDate(post.createdAt!) }}</span>
+          </p>
+          <div class="post-actions">
+            <button class="btn-edit" (click)="editBlogPost(post)">✏️ Bearbeiten</button>
+            <button 
+              class="btn-publish" 
+              *ngIf="post.status !== 'published'"
+              (click)="publishBlogPost(post)">
+              🚀 Veröffentlichen
+            </button>
+            <button class="btn-delete-post" (click)="deleteBlogPost(post._id!)">🗑️</button>
+          </div>
+        </div>
+      </div>
+      
+      <div class="no-results" *ngIf="filteredPosts.length === 0">
+        <p>Keine Blog-Beiträge gefunden</p>
+      </div>
+    </section>
+
+    <!-- Blog Editor -->
+    <div class="blog-editor" *ngIf="showBlogEditor">
+      <div class="editor-header">
+        <h2>{{ blogForm._id ? 'Beitrag bearbeiten' : 'Neuer Beitrag' }}</h2>
+        <div class="editor-actions">
+          <button class="btn-ai" (click)="openAIGenerator()" *ngIf="!showAIGenerator">
+            🤖 Mit AI generieren
+          </button>
+          <button class="btn-close" (click)="closeBlogEditor()">✕</button>
+        </div>
+      </div>
+
+      <!-- AI Generator -->
+      <div class="ai-generator" *ngIf="showAIGenerator">
+        <h3>🤖 AI Content Generator</h3>
+        <div class="ai-form">
+          <div class="form-row">
+            <div class="form-group">
+              <label>Thema *</label>
+              <input 
+                type="text" 
+                [(ngModel)]="aiTopic" 
+                placeholder="z.B. Die perfekte Autopflege im Winter">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Keywords (kommagetrennt)</label>
+              <input 
+                type="text" 
+                [(ngModel)]="aiKeywords" 
+                placeholder="z.B. Autopflege, Winter, Lackschutz">
+            </div>
+            <div class="form-group">
+              <label>Kategorie</label>
+              <input 
+                type="text" 
+                [(ngModel)]="aiCategory" 
+                placeholder="z.B. Winterpflege">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>Tonfall</label>
+            <select [(ngModel)]="aiTone">
+              <option value="professional">Professionell</option>
+              <option value="casual">Locker/Freundlich</option>
+            </select>
+          </div>
+          <div class="ai-actions">
+            <button class="btn-cancel" (click)="showAIGenerator = false">Abbrechen</button>
+            <button 
+              class="btn-generate" 
+              (click)="generateWithAI()" 
+              [disabled]="generatingAI || !aiTopic">
+              {{ generatingAI ? '🔄 Generiere...' : '✨ Generieren' }}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Blog Form -->
+      <form class="blog-form" *ngIf="!showAIGenerator">
+        <div class="form-row">
+          <div class="form-group full-width">
+            <label>Titel *</label>
+            <input 
+              type="text" 
+              [(ngModel)]="blogForm.title" 
+              name="title"
+              placeholder="SEO-optimierter Titel (max. 60 Zeichen)"
+              maxlength="60">
+            <small>{{ blogForm.title.length }}/60 Zeichen</small>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label>Kategorie *</label>
+            <input 
+              type="text" 
+              [(ngModel)]="blogForm.category" 
+              name="category"
+              placeholder="z.B. Lackpflege, Winterpflege">
+          </div>
+          <div class="form-group">
+            <label>Status</label>
+            <select [(ngModel)]="blogForm.status" name="status">
+              <option value="draft">Entwurf</option>
+              <option value="published">Veröffentlicht</option>
+              <option value="archived">Archiviert</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Kurzbeschreibung (Excerpt) *</label>
+          <textarea 
+            [(ngModel)]="blogForm.excerpt" 
+            name="excerpt"
+            rows="3"
+            placeholder="Kurze Zusammenfassung (150-200 Zeichen)"
+            maxlength="300"></textarea>
+          <small>{{ blogForm.excerpt.length }}/300 Zeichen</small>
+        </div>
+
+        <div class="form-group">
+          <label>Titelbild</label>
+          <input 
+            type="file" 
+            (change)="onImageSelect($event)"
+            accept="image/*">
+          <div class="image-preview" *ngIf="imagePreview">
+            <img [src]="imagePreview" alt="Vorschau">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Inhalt (Absätze) *</label>
+          <div class="paragraphs-editor">
+            <div class="paragraph-item" *ngFor="let paragraph of blogForm.fullContent; let i = index">
+              <div class="paragraph-header">
+                <label>Absatz {{ i + 1 }}</label>
+                <button type="button" class="btn-remove" (click)="removeParagraph(i)">✕</button>
+              </div>
+              <textarea 
+                [(ngModel)]="blogForm.fullContent[i]" 
+                [name]="'paragraph' + i"
+                rows="4"
+                placeholder="Absatzinhalt..."></textarea>
+            </div>
+            <button type="button" class="btn-add-paragraph" (click)="addParagraph()">
+              ➕ Absatz hinzufügen
+            </button>
+          </div>
+        </div>
+
+        <div class="seo-section">
+          <h3>SEO-Optimierung</h3>
+          
+          <div class="form-group">
+            <label>Meta-Titel</label>
+            <input 
+              type="text" 
+              [(ngModel)]="blogForm.metaTitle" 
+              name="metaTitle"
+              placeholder="SEO-Titel (55-60 Zeichen)"
+              maxlength="60">
+            <small>{{ blogForm.metaTitle.length }}/60 Zeichen</small>
+          </div>
+
+          <div class="form-group">
+            <label>Meta-Beschreibung</label>
+            <textarea 
+              [(ngModel)]="blogForm.metaDescription" 
+              name="metaDescription"
+              rows="2"
+              placeholder="SEO-Beschreibung (150-160 Zeichen)"
+              maxlength="160"></textarea>
+            <small>{{ blogForm.metaDescription.length }}/160 Zeichen</small>
+          </div>
+
+          <div class="form-group">
+            <label>Keywords (kommagetrennt)</label>
+            <input 
+              type="text" 
+              [ngModel]="blogForm.keywords.join(', ')" 
+              (ngModelChange)="onKeywordsChange($event)"
+              name="keywords"
+              placeholder="keyword1, keyword2, keyword3">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn-cancel" (click)="closeBlogEditor()">Abbrechen</button>
+          <button 
+            type="button" 
+            class="btn-save" 
+            (click)="saveBlogPost()" 
+            [disabled]="loading || !blogForm.title || !blogForm.category">
+            {{ loading ? 'Speichere...' : 'Speichern' }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <!-- END BLOG TAB -->
+</div>

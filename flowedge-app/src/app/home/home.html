@@ -1,0 +1,683 @@
+<!-- Navigation -->
+<nav class="navbar">
+  <div class="nav-container">
+    <div class="logo">
+      <a href="/">
+        <img src="/logojalud.png" alt="JALUD Logo" class="logo-img">
+      </a>
+    </div>
+    <ul class="nav-menu">
+      <li><a href="#ueber-jalud">Über JALUD</a></li>
+      <li><a href="#leistungen">Unsere Leistungen</a></li>
+      <li><a href="#preise">Preise</a></li>
+      <li><a href="/blog">Blog</a></li>
+      <li><a href="#kontakt">Kontakt</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Hero Section -->
+<section class="hero" id="home">
+  <div class="hero-header">
+    <p class="hero-subtitle">Perfektion im Detail</p>
+    <h1 class="hero-title">Premium Autopflege in Hattingen</h1>
+  </div>
+  
+  <div class="hero-content">
+    <!-- Vorher/Nachher Slider -->
+    <div class="hero-slider">
+      <h3>Unsere Arbeit spricht für sich</h3>
+      <div class="slider-container">
+        <div class="before-after-slider" 
+             (mousemove)="onSliderMouseMove($event)"
+             (mouseleave)="onSliderMouseLeave()"
+             (touchstart)="onSliderTouchStart($event)"
+             (touchmove)="onSliderTouchMove($event)"
+             (touchend)="onSliderTouchEnd()">
+          <div class="image-wrapper">
+            <img src="/images/before-after/before.jpg" alt="Vorher" class="image-before" onerror="this.src='/assets/before.svg'">
+            <img 
+              src="/images/before-after/after.jpg" 
+              alt="Nachher" 
+              class="image-after"
+              onerror="this.src='/assets/after.svg'"
+              [style.clip-path]="'inset(0 0 0 ' + beforeAfterPosition + '%)'">
+          </div>
+          <div class="slider-line" [style.left.%]="beforeAfterPosition">
+            <div class="slider-button">
+              <span class="arrow-left">◄</span>
+              <span class="arrow-right">►</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Contact Form -->
+    <div class="contact-form-hero">
+      <h3>Jetzt Termin vereinbaren</h3>
+      
+      <div class="form-message success" *ngIf="submitSuccess">
+        ✅ Ihre Anfrage wurde erfolgreich gesendet! Wir melden uns in Kürze bei Ihnen.
+      </div>
+      <div class="form-message error" *ngIf="submitError">
+        ❌ {{ submitError }}
+      </div>
+      
+      <form (ngSubmit)="onSubmit()" #contactFormRef="ngForm">
+        <div class="form-row">
+          <div class="form-group">
+            <input 
+              type="text" 
+              [(ngModel)]="contactForm.firstName" 
+              name="firstName"
+              placeholder="Vorname *" 
+              required>
+          </div>
+          <div class="form-group">
+            <input 
+              type="text" 
+              [(ngModel)]="contactForm.lastName" 
+              name="lastName"
+              placeholder="Nachname *" 
+              required>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <input 
+              type="tel" 
+              [(ngModel)]="contactForm.phone" 
+              name="phone"
+              placeholder="Telefonnummer *" 
+              required>
+          </div>
+          <div class="form-group">
+            <input 
+              type="email" 
+              [(ngModel)]="contactForm.email" 
+              name="email"
+              placeholder="E-Mail *" 
+              required>
+          </div>
+        </div>
+        <div class="form-group">
+          <select [(ngModel)]="contactForm.package" name="package" required>
+            <option value="" disabled selected>Paket wählen *</option>
+            <option value="basic">Basic (€149)</option>
+            <option value="premium">Premium (€349)</option>
+            <option value="luxus">Luxus (€499)</option>
+            <option value="beratung">Individuelle Beratung</option>
+          </select>
+        </div>
+        
+        <button type="submit" class="submit-btn" [disabled]="submitting">
+          {{ submitting ? 'Wird gesendet...' : 'Anfrage senden' }}
+        </button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<!-- Über JALUD Section -->
+<section class="about-section" id="ueber-jalud">
+  <div class="about-container">
+    <div class="about-content">
+      <div class="about-text">
+        <h2 class="section-title">Über JALUD</h2>
+        <p class="lead-text">
+          Premium Autopflege mit Leidenschaft und Präzision
+        </p>
+        <p>
+          Bei JALUD steht Perfektion im Detail an erster Stelle. Seit unserer Gründung haben wir uns der 
+          professionellen Fahrzeugaufbereitung verschrieben und bieten unseren Kunden in Hattingen und Umgebung 
+          erstklassige Autopflege-Dienstleistungen.
+        </p>
+        <p>
+          Unser erfahrenes Team arbeitet mit modernster Technik und hochwertigen Produkten, um Ihr Fahrzeug 
+          in neuwertigem Zustand zu präsentieren. Ob Innenraumaufbereitung, Lackpolitur oder Keramikversiegelung – 
+          wir behandeln jedes Fahrzeug mit der Sorgfalt, die es verdient.
+        </p>
+      </div>
+      
+      <div class="about-stats">
+        <div class="stat-card">
+          <div class="stat-number">500+</div>
+          <div class="stat-label">Zufriedene Kunden</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">10+</div>
+          <div class="stat-label">Jahre Erfahrung</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-number">100%</div>
+          <div class="stat-label">Qualitätsgarantie</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="about-features">
+      <h3>Warum JALUD?</h3>
+      <div class="features-grid">
+        <div class="feature-item">
+          <div class="feature-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="50" cy="50" r="35" stroke="currentColor" stroke-width="3" fill="none"/>
+              <path d="M 35 50 L 45 60 L 65 40" stroke="currentColor" stroke-width="3" fill="none"/>
+            </svg>
+          </div>
+          <h4>Professionelle Ausstattung</h4>
+          <p>Modernste Technik und hochwertige Produkte für optimale Ergebnisse</p>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="50,20 60,40 80,45 65,60 70,80 50,70 30,80 35,60 20,45 40,40" stroke="currentColor" stroke-width="3" fill="none"/>
+            </svg>
+          </div>
+          <h4>Erfahrenes Team</h4>
+          <p>Geschulte Mitarbeiter mit langjähriger Expertise in der Fahrzeugaufbereitung</p>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <rect x="30" y="30" width="40" height="40" stroke="currentColor" stroke-width="3" fill="none"/>
+              <circle cx="50" cy="50" r="8" fill="currentColor"/>
+            </svg>
+          </div>
+          <h4>Individuelle Beratung</h4>
+          <p>Persönliche Betreuung und maßgeschneiderte Lösungen für Ihr Fahrzeug</p>
+        </div>
+
+        <div class="feature-item">
+          <div class="feature-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <path d="M 30 70 Q 50 30 70 70" stroke="currentColor" stroke-width="3" fill="none"/>
+              <circle cx="50" cy="30" r="5" fill="currentColor"/>
+            </svg>
+          </div>
+          <h4>Fair & Transparent</h4>
+          <p>Klare Preisgestaltung ohne versteckte Kosten</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="about-mission">
+      <blockquote>
+        "Unser Ziel ist es, jedem Fahrzeug neuen Glanz zu verleihen und unseren Kunden 
+        ein erstklassiges Pflegeerlebnis zu bieten. Qualität, Zuverlässigkeit und Kundenzufriedenheit 
+        stehen bei uns an erster Stelle."
+      </blockquote>
+      <cite>— Das JALUD Team</cite>
+    </div>
+  </div>
+</section>
+
+<!-- Video Showcase Section -->
+<section class="video-showcase">
+  <div class="video-showcase-container">
+    <div class="video-header">
+      <div class="clapperboard-icon">
+        <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+          <!-- Clapperboard Top -->
+          <g class="clapper-top">
+            <rect x="20" y="25" width="80" height="20" fill="#000" stroke="#000" stroke-width="2"/>
+            <rect x="25" y="28" width="12" height="14" fill="#fff"/>
+            <rect x="42" y="28" width="12" height="14" fill="#000"/>
+            <rect x="59" y="28" width="12" height="14" fill="#fff"/>
+            <rect x="76" y="28" width="12" height="14" fill="#000"/>
+            <rect x="93" y="28" width="12" height="14" fill="#fff"/>
+          </g>
+          <!-- Clapperboard Base -->
+          <rect x="20" y="45" width="80" height="50" fill="none" stroke="#000" stroke-width="3"/>
+          <line x1="20" y1="55" x2="100" y2="55" stroke="#000" stroke-width="2"/>
+        </svg>
+      </div>
+      <span class="video-badge">UNSERE ARBEIT IN AKTION</span>
+      <h2 class="video-title">
+        Erleben Sie <span class="highlight">Premium Autopflege</span> auf höchstem Niveau
+      </h2>
+      <p class="video-subtitle">
+        Sehen Sie selbst, wie wir Ihr Fahrzeug in neuem Glanz erstrahlen lassen
+      </p>
+    </div>
+
+    <div class="video-wrapper">
+      <div class="video-frame">
+        <!-- Film Strip Decorations -->
+        <div class="film-strip film-strip-top">
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+        </div>
+        
+        <div class="film-strip film-strip-bottom">
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+        </div>
+        
+        <div class="film-strip film-strip-left">
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+        </div>
+        
+        <div class="film-strip film-strip-right">
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+          <div class="film-hole"></div>
+        </div>
+        
+        <div class="video-container" (click)="playVideo()">
+          <div class="video-play-overlay" [class.hidden]="videoPlaying">
+            <div class="play-text-wrapper">
+              <p class="play-text">Jetzt Film abspielen</p>
+              <p class="play-subtext">Erleben Sie Premium Autopflege in Aktion</p>
+            </div>
+          </div>
+          <div style="padding:56.25% 0 0 0;position:relative;">
+            <iframe 
+              #videoPlayer
+              src="https://player.vimeo.com/video/1131741720?h=55e0fc215e&badge=0&autopause=0&player_id=0&app_id=58479" 
+              frameborder="0" 
+              allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share" 
+              referrerpolicy="strict-origin-when-cross-origin" 
+              style="position:absolute;top:0;left:0;width:100%;height:100%;" 
+              title="Jalud Car Detailing in Hattingen">
+            </iframe>
+          </div>
+        </div>
+        
+        <!-- Decorative Elements -->
+        <div class="corner-accent corner-top-left"></div>
+        <div class="corner-accent corner-top-right"></div>
+        <div class="corner-accent corner-bottom-left"></div>
+        <div class="corner-accent corner-bottom-right"></div>
+      </div>
+    </div>
+
+    <div class="video-cta">
+      <p class="video-cta-text">Beeindruckt von unserer Arbeit?</p>
+      <a href="#kontakt" class="cta-btn cta-btn-large">
+        Jetzt Termin vereinbaren
+        <span class="arrow">→</span>
+      </a>
+    </div>
+  </div>
+</section>
+<script src="https://player.vimeo.com/api/player.js"></script>
+
+<!-- Leistungen Section -->
+<section class="services" id="leistungen">
+  <div class="services-container">
+    <h2 class="section-title">Unsere Leistungen im Überblick</h2>
+    
+    <div class="contact-info">
+      <p>Rufen Sie uns an unter <a href="tel:+4915563653836">+49 155 636 538 36</a></p>
+      <p>oder schreiben Sie eine E-Mail an <a href="mailto:info@jalud.de">info@jalud.de</a></p>
+      <p class="sub-text">wir beraten Sie persönlich und individuell.</p>
+    </div>
+
+    <div class="services-grid">
+      <!-- Innenreinigung -->
+      <div class="service-card">
+        <div class="service-image">
+          <img src="/images/LeistungenBilder/Innenreinigung.jpeg" alt="Innenreinigung">
+        </div>
+        <div class="service-icon">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <rect x="20" y="30" width="60" height="40" rx="5" stroke="currentColor" stroke-width="3" fill="none"/>
+            <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="2"/>
+            <circle cx="35" cy="40" r="3" fill="currentColor"/>
+          </svg>
+        </div>
+        <h3>Innenreinigung</h3>
+        <p>Professionelle Reinigung des Innenraums</p>
+      </div>
+
+      <!-- Abnutzungsspuren -->
+      <div class="service-card">
+        <div class="service-image">
+          <img src="/images/LeistungenBilder/Abnutzungsspuren.jpeg" alt="Abnutzungsspuren">
+        </div>
+        <div class="service-icon">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <path d="M 30 50 L 50 30 L 70 50 L 50 70 Z" stroke="currentColor" stroke-width="3" fill="none"/>
+            <circle cx="50" cy="50" r="5" fill="currentColor"/>
+          </svg>
+        </div>
+        <h3>Abnutzungsspuren</h3>
+        <p>Beseitigung von Gebrauchsspuren</p>
+      </div>
+
+      <!-- Außenreinigung -->
+      <div class="service-card">
+        <div class="service-image">
+          <img src="/images/LeistungenBilder/Außenreinigung.jpeg" alt="Außenreinigung">
+        </div>
+        <div class="service-icon">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="50" cy="50" rx="35" ry="25" stroke="currentColor" stroke-width="3" fill="none"/>
+            <path d="M 30 30 Q 50 20 70 30" stroke="currentColor" stroke-width="2" fill="none"/>
+          </svg>
+        </div>
+        <h3>Außenreinigung</h3>
+        <p>Gründliche Außenwäsche</p>
+      </div>
+
+      <!-- Lackaufbereitung -->
+      <div class="service-card">
+        <div class="service-image">
+          <img src="/images/LeistungenBilder/Lackaufbereitung.jpeg" alt="Lackaufbereitung">
+        </div>
+        <div class="service-icon">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="25" stroke="currentColor" stroke-width="3" fill="none"/>
+            <path d="M 35 50 L 45 60 L 65 40" stroke="currentColor" stroke-width="3" fill="none"/>
+          </svg>
+        </div>
+        <h3>Lackaufbereitung</h3>
+        <p>Politur und Versiegelung</p>
+      </div>
+
+      <!-- Fahrzeugveredelung -->
+      <div class="service-card">
+        <div class="service-image">
+          <img src="/images/LeistungenBilder/Fahrzeugveredelung.jpeg" alt="Fahrzeugveredelung">
+        </div>
+        <div class="service-icon">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="50,20 60,40 80,45 65,60 70,80 50,70 30,80 35,60 20,45 40,40" stroke="currentColor" stroke-width="3" fill="none"/>
+          </svg>
+        </div>
+        <h3>Fahrzeugveredelung</h3>
+        <p>Optische Aufwertung</p>
+      </div>
+
+      <!-- Spezialservices -->
+      <div class="service-card">
+        <div class="service-image">
+          <img src="/images/LeistungenBilder/Spezialservices.jpeg" alt="Spezialservices">
+        </div>
+        <div class="service-icon">
+          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <rect x="30" y="30" width="40" height="40" rx="5" stroke="currentColor" stroke-width="3" fill="none"/>
+            <line x1="50" y1="20" x2="50" y2="30" stroke="currentColor" stroke-width="3"/>
+            <line x1="50" y1="70" x2="50" y2="80" stroke="currentColor" stroke-width="3"/>
+            <line x1="20" y1="50" x2="30" y2="50" stroke="currentColor" stroke-width="3"/>
+            <line x1="70" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="3"/>
+          </svg>
+        </div>
+        <h3>Spezialservices</h3>
+        <p>Individuelle Sonderwünsche</p>
+      </div>
+    </div>
+
+    <div class="custom-service">
+      <p>Ihr Wunsch-Service ist nicht dabei?</p>
+      <a href="#kontakt" class="cta-btn">Kontaktieren Sie uns</a>
+    </div>
+  </div>
+</section>
+
+<!-- Preise Section -->
+<section class="pricing" id="preise">
+  <div class="pricing-container">
+    <h2 class="section-title">PREISE & PAKETE</h2>
+    
+    <div class="pricing-grid">
+      <!-- Basic Package -->
+      <div class="pricing-card">
+        <h3 class="package-name">Basic-Package</h3>
+        <div class="price">€149</div>
+        <p class="package-description">
+          Ideal für Einsteiger, die erste Erfahrungen sammeln möchten. 
+          Perfekt zur Erkundung grundlegender Services.
+        </p>
+        <ul class="features-list">
+          <li>AUSSENWÄSCHE</li>
+          <li>FELGENREINIGUNG</li>
+          <li>REIFENPFLEGE</li>
+          <li>SCHEIBENREINIGUNG</li>
+          <li>FUßMATTENREINIGUNG</li>
+          <li>COCKPITREINIGUNG</li>
+        </ul>
+        <a href="#kontakt" class="package-btn">Paket wählen</a>
+        <a href="#kontakt" class="package-btn package-btn-secondary">Kostenlose Beratung</a>
+      </div>
+
+      <!-- Premium Package -->
+      <div class="pricing-card featured">
+        <div class="popular-badge">Beliebtestes Paket</div>
+        <h3 class="package-name">Premium-Package</h3>
+        <div class="price">€349</div>
+        <p class="package-description">
+          Unser beliebtestes Paket – optimal für die meisten Kunden. 
+          Es bietet ein ausgewogenes Verhältnis aus Leistung und Preis mit den wichtigsten Services.
+        </p>
+        <ul class="features-list">
+          <li>AUSSENWÄSCHE</li>
+          <li>FELGENREINIGUNG</li>
+          <li>REIFENPFLEGE</li>
+          <li>SCHEIBENREINIGUNG</li>
+          <li>FUßMATTENREINIGUNG</li>
+          <li>COCKPITREINIGUNG</li>
+          <li>TEER-, HARZENTFERNUNG</li>
+          <li>INNENREINIGUNG</li>
+          <li>POLSTERREINIGUNG</li>
+          <li>HIMMEL REINIGUNG</li>
+          <li>TEPPICHBODEN REINIGUNG</li>
+          <li>LEDER PFLEGE</li>
+          <li>HOCHGLANZPOLITUR</li>
+        </ul>
+        <a href="#kontakt" class="package-btn">Paket wählen</a>
+        <a href="#kontakt" class="package-btn package-btn-secondary">Kostenlose Beratung</a>
+      </div>
+
+      <!-- Luxus Package -->
+      <div class="pricing-card">
+        <h3 class="package-name">Luxus-Package</h3>
+        <div class="price">€499</div>
+        <p class="package-description">
+          Für anspruchsvolle Kunden, die höchste Qualität und maximale Leistung benötigen. 
+          Nahezu unbegrenzte Möglichkeiten inklusive.
+        </p>
+        <ul class="features-list">
+          <li>AUSSENWÄSCHE</li>
+          <li>FELGENREINIGUNG</li>
+          <li>REIFENPFLEGE</li>
+          <li>SCHEIBENREINIGUNG</li>
+          <li>FUßMATTENREINIGUNG</li>
+          <li>COCKPITREINIGUNG</li>
+          <li>TEER-, HARZENTFERNUNG</li>
+          <li>INNENREINIGUNG</li>
+          <li>POLSTERREINIGUNG</li>
+          <li>HIMMELREINIGUNG</li>
+          <li>TEPPICHBODEN REINIGUNG</li>
+          <li>LEDER PFLEGE</li>
+          <li>SCHLEIFPOLITUR</li>
+          <li>HOCHGLANZPOLITUR</li>
+          <li>VERSIEGLUNG</li>
+        </ul>
+        <a href="#kontakt" class="package-btn">Paket wählen</a>
+        <a href="#kontakt" class="package-btn package-btn-secondary">Kostenlose Beratung</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Gallery Section -->
+<section class="gallery">
+  <h2>Überzeug dich selbst</h2>
+  <div class="gallery-slider-wrapper">
+    <div class="gallery-slider">
+      <div class="gallery-item" *ngFor="let image of galleryImages">
+        <img [src]="image.src" [alt]="image.alt">
+      </div>
+      <!-- Duplicate for seamless loop -->
+      <div class="gallery-item" *ngFor="let image of galleryImages">
+        <img [src]="image.src" [alt]="image.alt">
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Kundenbewertungen Section -->
+<section class="reviews" id="bewertungen">
+  <div class="reviews-header">
+    <h2>Das sagen unsere Kunden</h2>
+    <div class="reviews-rating">
+      <div class="stars">★★★★★</div>
+      <p class="rating-text">4.9 von 5 Sternen • 29 Bewertungen</p>
+    </div>
+  </div>
+  
+  <div class="reviews-slider-wrapper">
+    <div class="reviews-slider">
+      <div class="review-card" *ngFor="let review of reviews">
+        <div class="review-header">
+          <div class="review-author">
+            <div class="author-initial">{{ review.initial }}</div>
+            <div class="author-info">
+              <h4>{{ review.name }}</h4>
+              <p class="review-source">Google Rezension</p>
+            </div>
+          </div>
+          <div class="review-stars">{{ review.stars }}</div>
+        </div>
+        <div class="review-date">{{ review.date }}</div>
+        <p class="review-text">{{ review.text }}</p>
+      </div>
+      <!-- Duplicate for seamless loop -->
+      <div class="review-card" *ngFor="let review of reviews">
+        <div class="review-header">
+          <div class="review-author">
+            <div class="author-initial">{{ review.initial }}</div>
+            <div class="author-info">
+              <h4>{{ review.name }}</h4>
+              <p class="review-source">Google Rezension</p>
+            </div>
+          </div>
+          <div class="review-stars">{{ review.stars }}</div>
+        </div>
+        <div class="review-date">{{ review.date }}</div>
+        <p class="review-text">{{ review.text }}</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Contact Section -->
+<section class="contact-section" id="kontakt">
+  <div class="contact-container">
+    <h2>Kontakt</h2>
+    <div class="contact-grid">
+      <div class="contact-details">
+        <h3>Kontaktieren Sie uns</h3>
+        <p><strong>Telefon:</strong> <a href="tel:+4915563653836">+49 155 636 538 36</a></p>
+        <p><strong>E-Mail:</strong> <a href="mailto:info@jalud.de">info@jalud.de</a></p>
+        <p class="contact-text">Wir beraten Sie gerne persönlich und individuell.</p>
+      </div>
+      
+      <div class="contact-form">
+        <form (ngSubmit)="onSubmit()" #contactForm2="ngForm">
+          <div class="form-group">
+            <input type="text" [(ngModel)]="contactForm.firstName" name="firstName2" placeholder="Vorname *" required>
+          </div>
+          <div class="form-group">
+            <input type="text" [(ngModel)]="contactForm.lastName" name="lastName2" placeholder="Nachname *" required>
+          </div>
+          <div class="form-group">
+            <input type="tel" [(ngModel)]="contactForm.phone" name="phone2" placeholder="Telefonnummer *" required>
+          </div>
+          <div class="form-group">
+            <input type="email" [(ngModel)]="contactForm.email" name="email2" placeholder="E-Mail *" required>
+          </div>
+          <div class="form-group">
+            <select [(ngModel)]="contactForm.package" name="package2" required>
+              <option value="" disabled selected>Paket Wählen</option>
+              <option value="basic">Basic-Package (€149)</option>
+              <option value="premium">Premium-Package (€349)</option>
+              <option value="luxus">Luxus-Package (€499)</option>
+              <option value="beratung">Individuelle Beratung</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <textarea [(ngModel)]="contactForm.message" name="message2" placeholder="Ihre Nachricht *" rows="4" required></textarea>
+          </div>
+          <button type="submit" class="submit-btn">Nachricht senden</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-column footer-brand">
+      <a href="/">
+        <img src="/logojaludweiss.png" alt="JALUD Logo" class="footer-logo">
+      </a>
+      <p>Premium Autopflege in Hattingen</p>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Unsere Leistungen</h4>
+      <ul>
+        <li><a href="#leistungen">Innenreinigung</a></li>
+        <li><a href="#leistungen">Außenreinigung</a></li>
+        <li><a href="#leistungen">Lackaufbereitung</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Preise</h4>
+      <ul>
+        <li><a href="#preise">Basic-Package</a></li>
+        <li><a href="#preise">Premium-Package</a></li>
+        <li><a href="#preise">Luxus-Package</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Rechtliches</h4>
+      <ul>
+        <li><a href="/impressum">Impressum</a></li>
+        <li><a href="/datenschutz">Datenschutz</a></li>
+        <li><a href="/agb">AGB</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Kontakt</h4>
+      <p><a href="tel:+4915563653836">+49 155 636 538 36</a></p>
+      <p><a href="mailto:info@jalud.de">info@jalud.de</a></p>
+      <p class="footer-address">
+        Auf dem Haidchen 45<br>
+        45527 Hattingen
+      </p>
+    </div>
+  </div>
+  
+  <div class="footer-bottom">
+    <p>© 2025 JALUD. Alle Rechte vorbehalten.</p>
+  </div>
+</footer>

@@ -1,0 +1,111 @@
+<!-- Navigation -->
+<nav class="navbar">
+  <div class="nav-container">
+    <div class="logo">
+      <a href="/">
+        <img src="/logojalud.png" alt="JALUD Logo" class="logo-img">
+      </a>
+    </div>
+    <ul class="nav-menu">
+      <li><a href="/#ueber-jalud">Über JALUD</a></li>
+      <li><a href="/#leistungen">Unsere Leistungen</a></li>
+      <li><a href="/#preise">Preise</a></li>
+      <li><a href="/blog">Blog</a></li>
+      <li><a href="/#kontakt">Kontakt</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- Blog Post Content -->
+<article class="blog-post" *ngIf="post">
+  <div class="post-container">
+    <div class="post-header">
+      <a href="/blog" class="back-link">← Zurück zum Blog</a>
+      <span class="post-category">{{ post.category }}</span>
+      <h1 class="post-title">{{ post.title }}</h1>
+      <time class="post-date">{{ post.date }}</time>
+    </div>
+
+    <div class="post-image">
+      <img [src]="post.image" [alt]="post.title">
+    </div>
+
+    <div class="post-content">
+      <p *ngFor="let paragraph of post.fullContent">{{ paragraph }}</p>
+    </div>
+
+    <div class="post-footer">
+      <div class="post-cta">
+        <h3>Interessiert an professioneller Autopflege?</h3>
+        <p>Vereinbaren Sie jetzt einen Termin und erleben Sie den JALUD-Unterschied!</p>
+        <a href="/#kontakt" class="cta-btn">Jetzt Termin vereinbaren</a>
+      </div>
+    </div>
+
+    <div class="post-navigation">
+      <a href="/blog" class="nav-btn">← Alle Beiträge</a>
+    </div>
+  </div>
+</article>
+
+<!-- Not Found Message -->
+<div class="not-found" *ngIf="!post">
+  <div class="not-found-container">
+    <h1>Beitrag nicht gefunden</h1>
+    <p>Der gesuchte Blog-Beitrag existiert leider nicht.</p>
+    <a href="/blog" class="cta-btn">Zurück zum Blog</a>
+  </div>
+</div>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="footer-container">
+    <div class="footer-column footer-brand">
+      <a href="/">
+        <img src="/logojaludweiss.png" alt="JALUD Logo" class="footer-logo">
+      </a>
+      <p>Premium Autopflege in Hattingen</p>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Unsere Leistungen</h4>
+      <ul>
+        <li><a href="/#leistungen">Innenreinigung</a></li>
+        <li><a href="/#leistungen">Außenreinigung</a></li>
+        <li><a href="/#leistungen">Lackaufbereitung</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Preise</h4>
+      <ul>
+        <li><a href="/#preise">Basic-Package</a></li>
+        <li><a href="/#preise">Premium-Package</a></li>
+        <li><a href="/#preise">Luxus-Package</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Rechtliches</h4>
+      <ul>
+        <li><a href="/impressum">Impressum</a></li>
+        <li><a href="/datenschutz">Datenschutz</a></li>
+        <li><a href="/agb">AGB</a></li>
+      </ul>
+    </div>
+    
+    <div class="footer-column">
+      <h4>Kontakt</h4>
+      <p><a href="tel:+4915563653836">+49 155 636 538 36</a></p>
+      <p><a href="mailto:info@jalud.de">info@jalud.de</a></p>
+      <p class="footer-address">
+        Auf dem Haidchen 45<br>
+        45527 Hattingen
+      </p>
+    </div>
+  </div>
+  
+  <div class="footer-bottom">
+    <p>© 2025 JALUD. Alle Rechte vorbehalten.</p>
+  </div>
+</footer>

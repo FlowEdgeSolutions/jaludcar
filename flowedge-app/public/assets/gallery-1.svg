@@ -1,0 +1,8 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="600" fill="#ffffff"/>
+  <rect x="1" y="1" width="798" height="598" fill="none" stroke="#000000" stroke-width="2"/>
+  <ellipse cx="400" cy="350" rx="200" ry="120" fill="none" stroke="#000000" stroke-width="3"/>
+  <ellipse cx="320" cy="360" rx="30" ry="30" fill="#000000"/>
+  <ellipse cx="480" cy="360" rx="30" ry="30" fill="#000000"/>
+  <text x="50%" y="15%" text-anchor="middle" font-family="Space Grotesk" font-size="36" font-weight="700" fill="#000000">Innenreinigung</text>
+</svg>
