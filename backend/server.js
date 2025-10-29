@@ -402,43 +402,48 @@ app.post('/api/leads', async (req, res) => {
     });
 
     await lead.save();
+    console.log('✅ Lead gespeichert:', lead._id);
     
-    // Send emails if configured
+    // Send emails if configured (non-blocking)
     if (emailTransporter) {
-      try {
-        // 1. Confirmation email to customer
-        await emailTransporter.sendMail({
-          from: config.email.from,
-          to: email,
-          subject: 'Bestätigung Ihrer Anfrage - JALUD Premium Autopflege',
-          html: getCustomerEmailTemplate(lead)
-        });
+      // Don't await - send emails in background
+      emailTransporter.sendMail({
+        from: config.email.from,
+        to: email,
+        subject: 'Bestätigung Ihrer Anfrage - JALUD Premium Autopflege',
+        html: getCustomerEmailTemplate(lead)
+      }).then(() => {
         console.log(`✅ Bestätigungs-E-Mail an ${email} gesendet`);
+      }).catch(emailError => {
+        console.error('⚠️  E-Mail-Fehler (Kunde):', emailError.message);
+      });
 
-        // 2. Notification email to admin
-        await emailTransporter.sendMail({
-          from: config.email.from,
-          to: config.email.adminEmail,
-          subject: `🔔 Neue Lead-Anfrage von ${firstName} ${lastName}`,
-          html: getAdminEmailTemplate(lead)
-        });
+      emailTransporter.sendMail({
+        from: config.email.from,
+        to: config.email.adminEmail,
+        subject: `🔔 Neue Lead-Anfrage von ${firstName} ${lastName}`,
+        html: getAdminEmailTemplate(lead)
+      }).then(() => {
         console.log(`✅ Benachrichtigung an ${config.email.adminEmail} gesendet`);
-      } catch (emailError) {
-        console.error('⚠️  E-Mail-Fehler:', emailError);
-        // Continue even if email fails
-      }
+      }).catch(emailError => {
+        console.error('⚠️  E-Mail-Fehler (Admin):', emailError.message);
+      });
+    } else {
+      console.log('⚠️  E-Mails übersprungen - Service nicht konfiguriert');
     }
     
+    // Return success immediately after saving lead
     res.status(201).json({ 
       success: true, 
       message: 'Anfrage erfolgreich gesendet!',
       leadId: lead._id
     });
   } catch (error) {
-    console.error('Fehler beim Erstellen des Leads:', error);
+    console.error('❌ Fehler beim Erstellen des Leads:', error);
     res.status(500).json({ 
       success: false, 
-      message: 'Serverfehler beim Speichern der Anfrage' 
+      message: 'Serverfehler beim Speichern der Anfrage',
+      error: error.message
     });
   }
 });
