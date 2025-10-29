@@ -50,6 +50,7 @@ Thumbs.db
 .env.*.local
 backend/.env
 backend/config.json
+import.env
 
 # Uploads
 backend/uploads/
