@@ -6,7 +6,17 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
-const { attachDatabasePool } = require('@vercel/functions');
+
+// Try to import Vercel functions, but don't fail if not available
+let attachDatabasePool;
+try {
+  const vercelFunctions = require('@vercel/functions');
+  attachDatabasePool = vercelFunctions.attachDatabasePool;
+} catch (e) {
+  console.log('⚠️  @vercel/functions not available (optional optimization)');
+  attachDatabasePool = null;
+}
+
 require('dotenv').config();
 
 // Optional: Azure OpenAI (nur für Blog-Generierung)
@@ -137,11 +147,15 @@ async function connectToDatabase() {
       socketTimeoutMS: 45000,
     });
     
-    // Attach database pool for Vercel Functions
-    if (mongoose.connection.getClient) {
-      mongoClient = mongoose.connection.getClient();
-      attachDatabasePool(mongoClient);
-      console.log('✅ Vercel Database Pool attached');
+    // Attach database pool for Vercel Functions (if available)
+    if (attachDatabasePool && mongoose.connection.getClient) {
+      try {
+        mongoClient = mongoose.connection.getClient();
+        attachDatabasePool(mongoClient);
+        console.log('✅ Vercel Database Pool attached');
+      } catch (poolErr) {
+        console.log('⚠️  Database pool attachment skipped:', poolErr.message);
+      }
     }
     
     isMongoConnected = true;
