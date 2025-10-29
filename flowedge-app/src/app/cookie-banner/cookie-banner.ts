@@ -1,5 +1,5 @@
-import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, OnInit, Inject, PLATFORM_ID } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
 @Component({
@@ -14,10 +14,14 @@ export class CookieBanner implements OnInit {
   analyticsEnabled = false;
   marketingEnabled = false;
 
+  constructor(@Inject(PLATFORM_ID) private platformId: Object) {}
+
   ngOnInit() {
-    const consent = localStorage.getItem('cookieConsent');
-    if (!consent) {
-      this.showBanner = true;
+    if (isPlatformBrowser(this.platformId)) {
+      const consent = localStorage.getItem('cookieConsent');
+      if (!consent) {
+        this.showBanner = true;
+      }
     }
   }
 
@@ -47,13 +51,15 @@ export class CookieBanner implements OnInit {
   }
 
   private saveConsent() {
-    const consent = {
-      essential: true,
-      analytics: this.analyticsEnabled,
-      marketing: this.marketingEnabled,
-      timestamp: new Date().toISOString()
-    };
-    localStorage.setItem('cookieConsent', JSON.stringify(consent));
-    this.showBanner = false;
+    if (isPlatformBrowser(this.platformId)) {
+      const consent = {
+        essential: true,
+        analytics: this.analyticsEnabled,
+        marketing: this.marketingEnabled,
+        timestamp: new Date().toISOString()
+      };
+      localStorage.setItem('cookieConsent', JSON.stringify(consent));
+      this.showBanner = false;
+    }
   }
 }
