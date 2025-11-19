@@ -17,6 +17,9 @@ export class Home {
   @ViewChild('videoPlayer') videoPlayer!: ElementRef<HTMLIFrameElement>;
   videoPlaying = false;
   
+  // Mobile Menu
+  mobileMenuOpen = false;
+  
   contactForm = {
     firstName: '',
     lastName: '',
@@ -294,5 +297,13 @@ export class Home {
       const player = new (window as any).Vimeo.Player(iframe);
       player.play();
     }
+  }
+
+  toggleMobileMenu() {
+    this.mobileMenuOpen = !this.mobileMenuOpen;
+  }
+
+  closeMobileMenu() {
+    this.mobileMenuOpen = false;
   }
 }
