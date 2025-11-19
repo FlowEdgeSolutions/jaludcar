@@ -28,7 +28,10 @@ export class Blog implements OnInit {
   constructor(private http: HttpClient) {}
 
   ngOnInit() {
-    this.loadPublishedPosts();
+    // Prüfe ob Backend verfügbar ist, sonst direkt statische Posts laden
+    this.loadStaticPosts();
+    // Optional: Versuche Backend-Daten zu laden
+    // this.loadPublishedPosts();
   }
 
   loadPublishedPosts() {
@@ -61,93 +64,93 @@ export class Blog implements OnInit {
     this.blogPosts = [
       {
         id: 1,
-        title: 'Die perfekte Autopflege im Winter',
+        title: 'Keramikversiegelung für Ihr Auto: Der ultimative Lackschutz 2025',
         date: '15. Januar 2025',
-        excerpt: 'Winterliche Bedingungen stellen besondere Herausforderungen für Ihr Fahrzeug dar. Erfahren Sie, wie Sie Ihr Auto optimal schützen.',
-        content: 'Der Winter mit Streusalz, Schnee und Kälte beansprucht Lack und Interieur besonders stark. Eine professionelle Winterpflege ist essentiell.',
-        image: '/assets/gallery-1.svg',
-        category: 'Winterpflege'
+        excerpt: 'Keramikversiegelung bietet bis zu 5 Jahre Schutz für Ihren Autolack. Erfahren Sie alles über Vorteile, Kosten und den Ablauf der professionellen Nanoversiegelung in Hattingen.',
+        content: 'Keramikversiegelung ist die modernste Form des Lackschutzes und bietet zahlreiche Vorteile gegenüber herkömmlichen Wachsversiegelungen.',
+        image: '/assets/blog-keramik.jpg',
+        category: 'Lackpflege',
+        slug: 'keramikversiegelung-auto-lackschutz'
       },
       {
         id: 2,
-        title: 'Lackversiegelung: Warum sie so wichtig ist',
-        date: '8. Januar 2025',
-        excerpt: 'Eine hochwertige Lackversiegelung schützt Ihr Fahrzeug langfristig vor Umwelteinflüssen und erhält den Glanz.',
-        content: 'Moderne Lackversiegelungen bieten Schutz für bis zu 12 Monate und machen die Reinigung deutlich einfacher.',
-        image: '/assets/gallery-2.svg',
-        category: 'Lackpflege'
+        title: 'Autopflege im Winter: Professionelle Tipps gegen Salz und Streugut',
+        date: '10. Januar 2025',
+        excerpt: 'Streusalz, Schnee und Frost setzen Ihrem Fahrzeug zu. Mit der richtigen Winterpflege schützen Sie Lack, Unterboden und Innenraum effektiv vor Korrosion und Schäden.',
+        content: 'Die kalte Jahreszeit stellt besondere Anforderungen an die Autopflege. Streusalz ist besonders aggressiv und kann erhebliche Schäden verursachen.',
+        image: '/assets/blog-winter.jpg',
+        category: 'Saisonpflege',
+        slug: 'autopflege-winter-tipps-salzschutz'
       },
       {
         id: 3,
-        title: '5 Tipps für makellose Felgen',
-        date: '2. Januar 2025',
-        excerpt: 'Felgen sind das Aushängeschild Ihres Fahrzeugs. Mit diesen 5 Profi-Tipps bleiben sie dauerhaft sauber.',
-        content: 'Regelmäßige Felgenreinigung verhindert Bremsstaub-Ablagerungen und erhält den Wert Ihres Fahrzeugs.',
-        image: '/assets/gallery-3.svg',
-        category: 'Felgenpflege'
+        title: 'Innenraumaufbereitung: So erhöhen Sie den Wert Ihres Fahrzeugs',
+        date: '5. Januar 2025',
+        excerpt: 'Eine professionelle Innenraumaufbereitung steigert den Wiederverkaufswert um bis zu 15%. Erfahren Sie, wie Polsterreinigung, Lederaufbereitung und Geruchsneutralisation Ihr Auto transformieren.',
+        content: 'Der Innenraum ist das Herzstück Ihres Fahrzeugs. Eine professionelle Aufbereitung macht nicht nur optisch einen Unterschied.',
+        image: '/assets/blog-innenraum.jpg',
+        category: 'Innenraumpflege',
+        slug: 'innenraumaufbereitung-autowert-steigern'
       },
       {
         id: 4,
-        title: 'Innenraumaufbereitung: Frische für Ihr Auto',
+        title: 'Lackpolitur vs. Lackaufbereitung: Was braucht mein Auto wirklich?',
         date: '28. Dezember 2024',
-        excerpt: 'Ein gepflegter Innenraum steigert nicht nur den Wohlfühlfaktor, sondern auch den Wiederverkaufswert.',
-        content: 'Professionelle Polsterreinigung, Lederaufbereitung und Geruchsneutralisierung für ein neuwertiges Gefühl.',
-        image: '/assets/gallery-4.svg',
-        category: 'Innenraumpflege'
+        excerpt: 'Kratzer, Hologramme und matte Stellen im Lack? Wir erklären den Unterschied zwischen einfacher Politur und professioneller Lackaufbereitung. Mit Vorher-Nachher-Ergebnissen aus Hattingen.',
+        content: 'Viele Autobesitzer sind unsicher, ob eine Politur ausreicht oder eine komplette Lackaufbereitung notwendig ist.',
+        image: '/assets/blog-politur.jpg',
+        category: 'Lackaufbereitung',
+        slug: 'lackpolitur-lackaufbereitung-unterschied'
       },
       {
         id: 5,
-        title: 'Keramikversiegelung vs. Wachsversiegelung',
+        title: 'Fahrzeugaufbereitung vor dem Verkauf: Bis zu 3.000€ mehr erzielen',
         date: '20. Dezember 2024',
-        excerpt: 'Welche Versiegelung ist die richtige für Ihr Fahrzeug? Wir klären die Unterschiede auf.',
-        content: 'Keramikversiegelungen bieten längeren Schutz, während Wachsversiegelungen einen warmen Glanz erzeugen.',
-        image: '/assets/gallery-1.svg',
-        category: 'Lackpflege'
+        excerpt: 'Studien belegen: Professionell aufbereitete Fahrzeuge erzielen beim Verkauf deutlich höhere Preise. Investieren Sie 300€ in die Aufbereitung und gewinnen Sie bis zu 3.000€ beim Verkauf.',
+        content: 'Der erste Eindruck zählt - besonders beim Autoverkauf. Eine professionelle Fahrzeugaufbereitung zahlt sich mehrfach aus.',
+        image: '/assets/blog-verkauf.jpg',
+        category: 'Werterhalt',
+        slug: 'fahrzeugaufbereitung-vor-verkauf-wert-steigern'
       },
       {
         id: 6,
-        title: 'So bereiten Sie Ihr Auto auf den Frühling vor',
+        title: 'Scheinwerfer polieren: Mehr Sicherheit und bessere Optik',
         date: '15. Dezember 2024',
-        excerpt: 'Nach dem Winter benötigt Ihr Fahrzeug besondere Aufmerksamkeit. Unsere Checkliste hilft.',
-        content: 'Gründliche Unterbodenwäsche, Lackpolitur und Innenraumreinigung für den perfekten Start in die Saison.',
-        image: '/assets/gallery-2.svg',
-        category: 'Saisonpflege'
+        excerpt: 'Blinde Scheinwerfer reduzieren die Lichtleistung um bis zu 50%. Mit professioneller Scheinwerferaufbereitung verbessern Sie Sicht, Sicherheit und die Optik Ihres Fahrzeugs erheblich.',
+        content: 'UV-Strahlung und Witterung lassen Scheinwerfer mit der Zeit vergilben und matt werden. Das ist nicht nur ein optisches Problem.',
+        image: '/assets/blog-scheinwerfer.jpg',
+        category: 'Spezialservices',
+        slug: 'scheinwerfer-polieren-aufbereitung'
       },
       {
         id: 7,
-        title: 'Kratzer im Lack? Diese Optionen haben Sie',
+        title: 'Lederpflege im Auto: So bleibt Leder geschmeidig und rissefrei',
         date: '10. Dezember 2024',
-        excerpt: 'Kleine Kratzer müssen kein Schönheitsfehler bleiben. Wir zeigen professionelle Lösungen.',
-        content: 'Von Politur über Smart Repair bis zur Teillackierung - für jeden Kratzer gibt es die passende Lösung.',
-        image: '/assets/gallery-3.svg',
-        category: 'Lackaufbereitung'
+        excerpt: 'Autoleder benötigt regelmäßige Pflege, um nicht spröde zu werden. Mit den richtigen Pflegemitteln und Techniken bleibt Ihr Leder jahrelang geschmeidig, weich und optisch ansprechend.',
+        content: 'Leder ist ein Naturprodukt, das atmet und regelmäßige Pflege benötigt. Ohne richtige Behandlung wird es spröde und bekommt Risse.',
+        image: '/assets/blog-leder.jpg',
+        category: 'Innenraumpflege',
+        slug: 'lederpflege-auto-tipps-anleitung'
       },
       {
         id: 8,
-        title: 'Premium-Autopflege: Was macht den Unterschied?',
+        title: 'Kratzer im Autolack entfernen: Smart Repair vs. Neulackierung',
         date: '5. Dezember 2024',
-        excerpt: 'Erfahren Sie, warum professionelle Autopflege sich von der SB-Waschanlage unterscheidet.',
-        content: 'Hochwertige Produkte, geschultes Personal und moderne Technik garantieren perfekte Ergebnisse.',
-        image: '/assets/gallery-4.svg',
-        category: 'Premium Service'
+        excerpt: 'Kleine Kratzer müssen nicht teuer sein. Smart Repair ist die kostengünstige Alternative zur Neulackierung. Wir zeigen, wann welche Methode sinnvoll ist und was sie kostet.',
+        content: 'Kratzer im Lack sind ärgerlich, aber in vielen Fällen lassen sie sich kostengünstig reparieren. Die Wahl der richtigen Methode spart Geld.',
+        image: '/assets/blog-kratzer.jpg',
+        category: 'Lackaufbereitung',
+        slug: 'kratzer-autolack-entfernen-smart-repair'
       },
       {
         id: 9,
-        title: 'Lederpflege: So bleibt es geschmeidig',
+        title: 'Nanoversiegelung: Die Zukunft der Autopflege ist hier',
         date: '28. November 2024',
-        excerpt: 'Leder benötigt regelmäßige Pflege, um nicht spröde zu werden. Unsere Profi-Tipps.',
-        content: 'Spezielle Lederpflegemittel reinigen schonend und halten das Material elastisch und geschmeidig.',
-        image: '/assets/gallery-1.svg',
-        category: 'Innenraumpflege'
-      },
-      {
-        id: 10,
-        title: 'Warum regelmäßige Autopflege Geld spart',
-        date: '20. November 2024',
-        excerpt: 'Investieren Sie in die Pflege Ihres Fahrzeugs und profitieren Sie langfristig beim Wiederverkauf.',
-        content: 'Werterhalt durch professionelle Pflege kann beim Verkauf mehrere tausend Euro ausmachen.',
-        image: '/assets/gallery-2.svg',
-        category: 'Werterhalt'
+        excerpt: 'Nanoversiegelung schützt Lack, Felgen und Scheiben durch mikroskopisch kleine Partikel. Schmutz perlt ab, Reinigung wird zum Kinderspiel. Alles über die innovative Technologie.',
+        content: 'Nanotechnologie revolutioniert die Autopflege. Die winzigen Partikel bilden eine unsichtbare Schutzschicht auf molekularer Ebene.',
+        image: '/assets/blog-nano.jpg',
+        category: 'Lackpflege',
+        slug: 'nanoversiegelung-auto-vorteile-kosten'
       }
     ];
   }

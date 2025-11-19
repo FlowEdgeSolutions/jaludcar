@@ -35,6 +35,8 @@ export class Home {
   beforeAfterPosition = 50;
   private isDragging = false;
   private isMobile = false;
+  beforeImageLoaded = false;
+  afterImageLoaded = false;
 
   galleryImages = [
     { src: '/images/gallery/jalud_bild1_Halle.jpg', alt: 'JALUD Autopflege Halle' },
@@ -74,8 +76,7 @@ export class Home {
   }
   
   private updateSliderPosition(event: MouseEvent) {
-    event.preventDefault();
-    const target = (event.currentTarget as HTMLElement).querySelector('.before-after-slider') as HTMLElement;
+    const target = event.currentTarget as HTMLElement;
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -85,7 +86,7 @@ export class Home {
   
   private updateSliderPositionTouch(event: TouchEvent) {
     event.preventDefault();
-    const target = (event.currentTarget as HTMLElement).querySelector('.before-after-slider') as HTMLElement;
+    const target = event.currentTarget as HTMLElement;
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const x = event.touches[0].clientX - rect.left;

@@ -35,12 +35,46 @@
              (touchmove)="onSliderTouchMove($event)"
              (touchend)="onSliderTouchEnd()">
           <div class="image-wrapper">
-            <img src="/images/before-after/before.jpg" alt="Vorher" class="image-before" onerror="this.src='/assets/before.svg'">
+            <div class="placeholder-image image-before" *ngIf="!beforeImageLoaded">
+              <div class="placeholder-content">
+                <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="10" y="10" width="80" height="80" fill="none" stroke="currentColor" stroke-width="3"/>
+                  <circle cx="35" cy="35" r="8" fill="currentColor"/>
+                  <polyline points="10,70 30,50 50,60 90,30" fill="none" stroke="currentColor" stroke-width="3"/>
+                </svg>
+                <p>VORHER</p>
+                <span>Bitte fügen Sie hier before.jpg ein</span>
+              </div>
+            </div>
+            <img 
+              src="/images/before-after/before.jpg" 
+              alt="Vorher" 
+              class="image-before"
+              (load)="beforeImageLoaded = true"
+              (error)="beforeImageLoaded = false"
+              [style.display]="beforeImageLoaded ? 'block' : 'none'">
+            
+            <div 
+              class="placeholder-image image-after" 
+              *ngIf="!afterImageLoaded"
+              [style.clip-path]="'inset(0 0 0 ' + beforeAfterPosition + '%)'">
+              <div class="placeholder-content">
+                <svg width="80" height="80" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="10" y="10" width="80" height="80" fill="none" stroke="currentColor" stroke-width="3"/>
+                  <circle cx="35" cy="35" r="8" fill="currentColor"/>
+                  <polyline points="10,70 30,50 50,60 90,30" fill="none" stroke="currentColor" stroke-width="3"/>
+                </svg>
+                <p>NACHHER</p>
+                <span>Bitte fügen Sie hier after.jpg ein</span>
+              </div>
+            </div>
             <img 
               src="/images/before-after/after.jpg" 
               alt="Nachher" 
               class="image-after"
-              onerror="this.src='/assets/after.svg'"
+              (load)="afterImageLoaded = true"
+              (error)="afterImageLoaded = false"
+              [style.display]="afterImageLoaded ? 'block' : 'none'"
               [style.clip-path]="'inset(0 0 0 ' + beforeAfterPosition + '%)'">
           </div>
           <div class="slider-line" [style.left.%]="beforeAfterPosition">
@@ -341,15 +375,17 @@
         <div class="service-image">
           <img src="/images/LeistungenBilder/Innenreinigung.jpeg" alt="Innenreinigung">
         </div>
-        <div class="service-icon">
-          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <rect x="20" y="30" width="60" height="40" rx="5" stroke="currentColor" stroke-width="3" fill="none"/>
-            <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="2"/>
-            <circle cx="35" cy="40" r="3" fill="currentColor"/>
-          </svg>
+        <div class="service-content">
+          <div class="service-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <rect x="20" y="30" width="60" height="40" rx="5" stroke="currentColor" stroke-width="3" fill="none"/>
+              <line x1="20" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="2"/>
+              <circle cx="35" cy="40" r="3" fill="currentColor"/>
+            </svg>
+          </div>
+          <h3>Innenreinigung</h3>
+          <p>Professionelle Reinigung des Innenraums mit hochwertigen Produkten</p>
         </div>
-        <h3>Innenreinigung</h3>
-        <p>Professionelle Reinigung des Innenraums</p>
       </div>
 
       <!-- Abnutzungsspuren -->
@@ -357,14 +393,16 @@
         <div class="service-image">
           <img src="/images/LeistungenBilder/Abnutzungsspuren.jpeg" alt="Abnutzungsspuren">
         </div>
-        <div class="service-icon">
-          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <path d="M 30 50 L 50 30 L 70 50 L 50 70 Z" stroke="currentColor" stroke-width="3" fill="none"/>
-            <circle cx="50" cy="50" r="5" fill="currentColor"/>
-          </svg>
+        <div class="service-content">
+          <div class="service-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <path d="M 30 50 L 50 30 L 70 50 L 50 70 Z" stroke="currentColor" stroke-width="3" fill="none"/>
+              <circle cx="50" cy="50" r="5" fill="currentColor"/>
+            </svg>
+          </div>
+          <h3>Abnutzungsspuren</h3>
+          <p>Professionelle Beseitigung von Gebrauchsspuren und Kratzern</p>
         </div>
-        <h3>Abnutzungsspuren</h3>
-        <p>Beseitigung von Gebrauchsspuren</p>
       </div>
 
       <!-- Außenreinigung -->
@@ -372,14 +410,16 @@
         <div class="service-image">
           <img src="/images/LeistungenBilder/Außenreinigung.jpeg" alt="Außenreinigung">
         </div>
-        <div class="service-icon">
-          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <ellipse cx="50" cy="50" rx="35" ry="25" stroke="currentColor" stroke-width="3" fill="none"/>
-            <path d="M 30 30 Q 50 20 70 30" stroke="currentColor" stroke-width="2" fill="none"/>
-          </svg>
+        <div class="service-content">
+          <div class="service-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <ellipse cx="50" cy="50" rx="35" ry="25" stroke="currentColor" stroke-width="3" fill="none"/>
+              <path d="M 30 30 Q 50 20 70 30" stroke="currentColor" stroke-width="2" fill="none"/>
+            </svg>
+          </div>
+          <h3>Außenreinigung</h3>
+          <p>Gründliche Außenwäsche für perfekten Glanz</p>
         </div>
-        <h3>Außenreinigung</h3>
-        <p>Gründliche Außenwäsche</p>
       </div>
 
       <!-- Lackaufbereitung -->
@@ -387,14 +427,16 @@
         <div class="service-image">
           <img src="/images/LeistungenBilder/Lackaufbereitung.jpeg" alt="Lackaufbereitung">
         </div>
-        <div class="service-icon">
-          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="25" stroke="currentColor" stroke-width="3" fill="none"/>
-            <path d="M 35 50 L 45 60 L 65 40" stroke="currentColor" stroke-width="3" fill="none"/>
-          </svg>
+        <div class="service-content">
+          <div class="service-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="50" cy="50" r="25" stroke="currentColor" stroke-width="3" fill="none"/>
+              <path d="M 35 50 L 45 60 L 65 40" stroke="currentColor" stroke-width="3" fill="none"/>
+            </svg>
+          </div>
+          <h3>Lackaufbereitung</h3>
+          <p>Professionelle Politur und langanhaltende Versiegelung</p>
         </div>
-        <h3>Lackaufbereitung</h3>
-        <p>Politur und Versiegelung</p>
       </div>
 
       <!-- Fahrzeugveredelung -->
@@ -402,13 +444,15 @@
         <div class="service-image">
           <img src="/images/LeistungenBilder/Fahrzeugveredelung.jpeg" alt="Fahrzeugveredelung">
         </div>
-        <div class="service-icon">
-          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <polygon points="50,20 60,40 80,45 65,60 70,80 50,70 30,80 35,60 20,45 40,40" stroke="currentColor" stroke-width="3" fill="none"/>
-          </svg>
+        <div class="service-content">
+          <div class="service-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="50,20 60,40 80,45 65,60 70,80 50,70 30,80 35,60 20,45 40,40" stroke="currentColor" stroke-width="3" fill="none"/>
+            </svg>
+          </div>
+          <h3>Fahrzeugveredelung</h3>
+          <p>Hochwertige optische Aufwertung Ihres Fahrzeugs</p>
         </div>
-        <h3>Fahrzeugveredelung</h3>
-        <p>Optische Aufwertung</p>
       </div>
 
       <!-- Spezialservices -->
@@ -416,17 +460,19 @@
         <div class="service-image">
           <img src="/images/LeistungenBilder/Spezialservices.jpeg" alt="Spezialservices">
         </div>
-        <div class="service-icon">
-          <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-            <rect x="30" y="30" width="40" height="40" rx="5" stroke="currentColor" stroke-width="3" fill="none"/>
-            <line x1="50" y1="20" x2="50" y2="30" stroke="currentColor" stroke-width="3"/>
-            <line x1="50" y1="70" x2="50" y2="80" stroke="currentColor" stroke-width="3"/>
-            <line x1="20" y1="50" x2="30" y2="50" stroke="currentColor" stroke-width="3"/>
-            <line x1="70" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="3"/>
-          </svg>
+        <div class="service-content">
+          <div class="service-icon">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <rect x="30" y="30" width="40" height="40" rx="5" stroke="currentColor" stroke-width="3" fill="none"/>
+              <line x1="50" y1="20" x2="50" y2="30" stroke="currentColor" stroke-width="3"/>
+              <line x1="50" y1="70" x2="50" y2="80" stroke="currentColor" stroke-width="3"/>
+              <line x1="20" y1="50" x2="30" y2="50" stroke="currentColor" stroke-width="3"/>
+              <line x1="70" y1="50" x2="80" y2="50" stroke="currentColor" stroke-width="3"/>
+            </svg>
+          </div>
+          <h3>Spezialservices</h3>
+          <p>Maßgeschneiderte Lösungen für individuelle Wünsche</p>
         </div>
-        <h3>Spezialservices</h3>
-        <p>Individuelle Sonderwünsche</p>
       </div>
     </div>
 
