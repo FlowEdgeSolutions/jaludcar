@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { environment } from '../../environments/environment';
 
 interface Lead {
   _id: string;
@@ -60,7 +61,7 @@ interface AIGeneratedContent {
   styleUrl: './admin.scss',
 })
 export class Admin implements OnInit {
-  private apiUrl = '/api';
+  private apiUrl = environment.apiUrl;
   
   // Tabs
   activeTab: 'leads' | 'blog' = 'leads';

@@ -4,5 +4,5 @@
 
 export const environment = {
   production: true,
-  apiUrl: '/api'
+  apiUrl: 'https://api.jalud.de/api'
 };

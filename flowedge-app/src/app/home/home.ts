@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { ViewChild, ElementRef } from '@angular/core';
+import { environment } from '../../environments/environment';
 
 @Component({
   selector: 'app-home',
@@ -12,7 +13,7 @@ import { ViewChild, ElementRef } from '@angular/core';
 })
 export class Home {
   title = 'JALUD';
-  private apiUrl = '/api';
+  private apiUrl = environment.apiUrl;
   
   @ViewChild('videoPlayer') videoPlayer!: ElementRef<HTMLIFrameElement>;
   videoPlaying = false;

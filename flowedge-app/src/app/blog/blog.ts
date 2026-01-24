@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { environment } from '../../environments/environment';
 
 interface BlogPost {
   id: number | string;
@@ -21,7 +22,7 @@ interface BlogPost {
   styleUrl: './blog.scss',
 })
 export class Blog implements OnInit {
-  private apiUrl = '/api';
+  private apiUrl = environment.apiUrl;
   blogPosts: BlogPost[] = [];
   loading = false;
 
