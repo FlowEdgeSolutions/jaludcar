@@ -21,6 +21,25 @@
           {{ item.label }}
         </a>
       </li>
+      <li class="nav-dropdown" [class.open]="isLegalOpen">
+        <button
+          type="button"
+          class="dropdown-toggle"
+          (click)="toggleLegal()"
+          [attr.aria-expanded]="isLegalOpen">
+          Rechtliches
+        </button>
+        <ul class="dropdown-menu">
+          <li *ngFor="let item of legalLinks">
+            <a [routerLink]="item.link" (click)="closeMenu()">{{ item.label }}</a>
+          </li>
+        </ul>
+      </li>
+      <li class="nav-cta">
+        <a class="cta-btn" routerLink="/" fragment="kontakt" (click)="closeMenu()">
+          Jetzt Termin sichern
+        </a>
+      </li>
     </ul>
   </div>
 </nav>

@@ -1,7 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { Navbar } from '../navbar/navbar';
 
 interface BlogPostData {
   id: number;
@@ -16,7 +15,7 @@ interface BlogPostData {
 
 @Component({
   selector: 'app-blog-post',
-  imports: [CommonModule, Navbar],
+  imports: [CommonModule],
   templateUrl: './blog-post.html',
   styleUrl: './blog-post.scss',
 })

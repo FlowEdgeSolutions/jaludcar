@@ -1,9 +1,7 @@
 import { Component } from '@angular/core';
-import { Navbar } from '../navbar/navbar';
-
 @Component({
   selector: 'app-datenschutz',
-  imports: [Navbar],
+  imports: [],
   templateUrl: './datenschutz.html',
   styleUrl: './datenschutz.scss',
 })

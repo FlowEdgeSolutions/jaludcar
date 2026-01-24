@@ -1,9 +1,7 @@
 import { Component } from '@angular/core';
-import { Navbar } from '../navbar/navbar';
-
 @Component({
   selector: 'app-agb',
-  imports: [Navbar],
+  imports: [],
   templateUrl: './agb.html',
   styleUrl: './agb.scss',
 })
