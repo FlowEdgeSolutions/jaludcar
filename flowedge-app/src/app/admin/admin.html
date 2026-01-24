@@ -256,7 +256,7 @@
     <section class="blog-posts-grid" *ngIf="!loading && !showBlogEditor">
       <div class="blog-post-card" *ngFor="let post of filteredPosts">
         <div class="post-image" *ngIf="post.image">
-          <img [src]="'http://localhost:3000' + post.image" [alt]="post.title">
+          <img [src]="post.image" [alt]="post.title">
         </div>
         <div class="post-content">
           <span class="post-status-badge" [style.background-color]="getPostStatusColor(post.status)">

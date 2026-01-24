@@ -21,7 +21,7 @@ interface BlogPost {
   styleUrl: './blog.scss',
 })
 export class Blog implements OnInit {
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = '/api';
   blogPosts: BlogPost[] = [];
   loading = false;
 
@@ -46,7 +46,7 @@ export class Blog implements OnInit {
             date: this.formatDate(post.publishedAt),
             excerpt: post.excerpt,
             content: '',
-            image: post.image ? `http://localhost:3000${post.image}` : '/assets/gallery-1.svg',
+            image: post.image ? `${post.image}` : '/assets/gallery-1.svg',
             category: post.category
           }));
           this.loading = false;

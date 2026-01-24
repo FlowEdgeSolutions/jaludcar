@@ -4,7 +4,11 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "/api/index"
+      "destination": "https://api.jalud.de/api/:path*"
+    },
+    {
+      "source": "/uploads/:path*",
+      "destination": "https://api.jalud.de/uploads/:path*"
     },
     {
       "source": "/(.*)",

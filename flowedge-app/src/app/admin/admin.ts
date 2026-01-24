@@ -60,7 +60,7 @@ interface AIGeneratedContent {
   styleUrl: './admin.scss',
 })
 export class Admin implements OnInit {
-  private apiUrl = 'http://localhost:3000/api';
+  private apiUrl = '/api';
   
   // Tabs
   activeTab: 'leads' | 'blog' = 'leads';
@@ -351,7 +351,7 @@ export class Admin implements OnInit {
 
   editBlogPost(post: BlogPost) {
     this.blogForm = { ...post };
-    this.imagePreview = post.image ? `http://localhost:3000${post.image}` : '';
+    this.imagePreview = post.image ? `${post.image}` : '';
     this.showBlogEditor = true;
   }
 

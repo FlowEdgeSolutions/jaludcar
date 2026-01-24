@@ -4,8 +4,7 @@
     "model": "gemini-3-flash-preview"
   },
   "blog": {
-    "imagesPath": "public/images/blog",
-    "postsPath": "backend/data/blog-posts.json"
+    "imagesPath": "uploads/blog"
   },
   "email": {
     "host": "smtp.strato.de",
