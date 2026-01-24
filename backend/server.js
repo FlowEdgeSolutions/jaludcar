@@ -6,6 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const { GoogleGenAI } = require('@google/genai');
+const { Pool } = require('pg');
 
 require('dotenv').config();
 
@@ -88,62 +89,104 @@ if (geminiApiKey) {
   console.log('âš ï¸  Gemini API nicht konfiguriert (nur fÃ¼r Blog-Generierung benÃ¶tigt).');
 }
 
-// Helpers for file-based lead storage
-const leadsFilePath = path.join(__dirname, 'data', 'leads.json');
+// Database (PostgreSQL)
+const databaseUrl = process.env.DATABASE_URL;
+const shouldUseSSL = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
+const pool = databaseUrl
+  ? new Pool({
+      connectionString: databaseUrl,
+      ssl: shouldUseSSL ? { rejectUnauthorized: false } : undefined
+    })
+  : null;
 
-async function ensureLeadsFile() {
-  const dir = path.dirname(leadsFilePath);
-  await fs.promises.mkdir(dir, { recursive: true });
-  try {
-    await fs.promises.access(leadsFilePath);
-  } catch (err) {
-    await fs.promises.writeFile(leadsFilePath, '[]', 'utf8');
+let dbInitPromise = null;
+
+async function initDb() {
+  if (!pool) {
+    throw new Error('DATABASE_URL ist nicht gesetzt. Bitte in Railway oder .env konfigurieren.');
   }
-}
-
-async function readLeads() {
-  await ensureLeadsFile();
-  const raw = await fs.promises.readFile(leadsFilePath, 'utf8');
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
+  if (!dbInitPromise) {
+    dbInitPromise = (async () => {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS leads (
+          id UUID PRIMARY KEY,
+          first_name TEXT NOT NULL,
+          last_name TEXT NOT NULL,
+          phone TEXT NOT NULL,
+          email TEXT NOT NULL,
+          package TEXT NOT NULL,
+          message TEXT,
+          status TEXT NOT NULL DEFAULT 'neu',
+          notes TEXT,
+          created_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL
+        );
+      `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS blog_posts (
+          id UUID PRIMARY KEY,
+          title TEXT NOT NULL,
+          slug TEXT NOT NULL UNIQUE,
+          excerpt TEXT NOT NULL,
+          content TEXT NOT NULL,
+          full_content JSONB NOT NULL DEFAULT '[]'::jsonb,
+          image TEXT,
+          category TEXT NOT NULL,
+          meta_title TEXT,
+          meta_description TEXT,
+          keywords JSONB NOT NULL DEFAULT '[]'::jsonb,
+          status TEXT NOT NULL DEFAULT 'draft',
+          ai_generated BOOLEAN NOT NULL DEFAULT false,
+          published_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL
+        );
+      `);
+    })();
   }
+  return dbInitPromise;
 }
 
-async function writeLeads(leads) {
-  await ensureLeadsFile();
-  await fs.promises.writeFile(leadsFilePath, JSON.stringify(leads, null, 2), 'utf8');
+async function dbQuery(text, params) {
+  await initDb();
+  return pool.query(text, params);
 }
 
-// Helpers for file-based blog storage
-const blogPostsFilePath = path.join(__dirname, 'data', 'blog-posts.json');
-
-async function ensureBlogPostsFile() {
-  const dir = path.dirname(blogPostsFilePath);
-  await fs.promises.mkdir(dir, { recursive: true });
-  try {
-    await fs.promises.access(blogPostsFilePath);
-  } catch (err) {
-    await fs.promises.writeFile(blogPostsFilePath, '[]', 'utf8');
-  }
+function mapLeadRow(row) {
+  return {
+    _id: row.id,
+    firstName: row.first_name,
+    lastName: row.last_name,
+    phone: row.phone,
+    email: row.email,
+    package: row.package,
+    message: row.message || '',
+    status: row.status,
+    notes: row.notes || '',
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
 }
 
-async function readBlogPosts() {
-  await ensureBlogPostsFile();
-  const raw = await fs.promises.readFile(blogPostsFilePath, 'utf8');
-  if (!raw) return [];
-  try {
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-async function writeBlogPosts(posts) {
-  await ensureBlogPostsFile();
-  await fs.promises.writeFile(blogPostsFilePath, JSON.stringify(posts, null, 2), 'utf8');
+function mapBlogRow(row) {
+  return {
+    _id: row.id,
+    title: row.title,
+    slug: row.slug,
+    excerpt: row.excerpt,
+    content: row.content,
+    fullContent: row.full_content || [],
+    image: row.image || '',
+    category: row.category,
+    metaTitle: row.meta_title || '',
+    metaDescription: row.meta_description || '',
+    keywords: row.keywords || [],
+    status: row.status,
+    aiGenerated: row.ai_generated,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
 }
 
 function slugify(text = '') {
@@ -157,9 +200,17 @@ function slugify(text = '') {
     .replace(/^-|-$/g, '');
 }
 
-function ensureUniqueSlug(baseSlug, posts, excludeId) {
+async function slugExists(slug, excludeId) {
+  const result = await dbQuery(
+    `SELECT 1 FROM blog_posts WHERE slug = $1 AND ($2::uuid IS NULL OR id <> $2) LIMIT 1`,
+    [slug, excludeId || null]
+  );
+  return result.rowCount > 0;
+}
+
+async function ensureUniqueSlug(baseSlug, excludeId) {
   let candidate = baseSlug || `post-${Date.now()}`;
-  while (posts.some(p => p.slug === candidate && p.id !== excludeId)) {
+  while (await slugExists(candidate, excludeId)) {
     candidate = `${candidate}-${Math.floor(Math.random() * 1000)}`;
   }
   return candidate;
@@ -172,16 +223,18 @@ const BLOG_STATUSES = ['draft', 'published', 'archived'];
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+const uploadsBaseDir = process.env.UPLOADS_DIR
+  ? path.resolve(process.env.UPLOADS_DIR)
+  : path.join(__dirname, 'uploads');
+const blogUploadDir = path.join(uploadsBaseDir, 'blog');
+fs.mkdirSync(blogUploadDir, { recursive: true });
+
+app.use('/uploads', express.static(uploadsBaseDir));
 
 // Multer configuration for image uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, 'uploads', 'blog');
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-    cb(null, uploadDir);
+    cb(null, blogUploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueName = `${Date.now()}-${Math.round(Math.random() * 1E9)}${path.extname(file.originalname)}`;
@@ -218,30 +271,34 @@ app.post('/api/leads', async (req, res) => {
       });
     }
 
-    const leads = await readLeads();
-    const newLead = {
-      id: randomUUID(),
-      firstName,
-      lastName,
-      phone,
-      email,
-      package: pkg,
-      message: message || '',
-      status: 'neu',
-      notes: '',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    };
+    const id = randomUUID();
+    const now = new Date().toISOString();
 
-    leads.push(newLead);
-    await writeLeads(leads);
+    await dbQuery(
+      `INSERT INTO leads
+        (id, first_name, last_name, phone, email, package, message, status, notes, created_at, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [
+        id,
+        firstName,
+        lastName,
+        phone,
+        email,
+        pkg,
+        message || '',
+        'neu',
+        '',
+        now,
+        now
+      ]
+    );
     
-    console.log('âœ… Lead gespeichert:', newLead.id);
+    console.log('âœ… Lead gespeichert:', id);
     
     res.status(201).json({ 
       success: true, 
       message: 'Anfrage erfolgreich gesendet!',
-      leadId: newLead.id
+      leadId: id
     });
   } catch (error) {
     console.error('âŒ Fehler beim Erstellen des Leads:', error);
@@ -257,28 +314,30 @@ app.get('/api/leads', async (req, res) => {
   try {
     const { status, sortBy = 'createdAt', order = 'desc' } = req.query;
     
-    let leads = await readLeads();
-    if (status && status !== 'all') {
-      leads = leads.filter(lead => lead.status === status);
-    }
+    const sortMap = {
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      firstName: 'first_name',
+      lastName: 'last_name',
+      status: 'status',
+      package: 'package'
+    };
+    const sortColumn = sortMap[sortBy] || 'created_at';
+    const sortDirection = order === 'asc' ? 'ASC' : 'DESC';
+    const statusFilter = status && status !== 'all' ? status : null;
 
-    leads.sort((a, b) => {
-      if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
-        const dateA = new Date(a[sortBy]);
-        const dateB = new Date(b[sortBy]);
-        return order === 'asc' ? dateA - dateB : dateB - dateA;
-      }
-      const valueA = `${a[sortBy] || ''}`.toLowerCase();
-      const valueB = `${b[sortBy] || ''}`.toLowerCase();
-      if (valueA < valueB) return order === 'asc' ? -1 : 1;
-      if (valueA > valueB) return order === 'asc' ? 1 : -1;
-      return 0;
-    });
+    const result = await dbQuery(
+      `SELECT * FROM leads
+       WHERE ($1::text IS NULL OR status = $1)
+       ORDER BY ${sortColumn} ${sortDirection}`,
+      [statusFilter]
+    );
+    const leads = result.rows.map(mapLeadRow);
     
     res.json({ 
       success: true, 
       count: leads.length,
-      leads 
+      leads
     });
   } catch (error) {
     console.error('Fehler beim Abrufen der Leads:', error);
@@ -292,8 +351,8 @@ app.get('/api/leads', async (req, res) => {
 // GET - Get single lead
 app.get('/api/leads/:id', async (req, res) => {
   try {
-    const leads = await readLeads();
-    const lead = leads.find(l => l.id === req.params.id);
+    const result = await dbQuery(`SELECT * FROM leads WHERE id = $1`, [req.params.id]);
+    const lead = result.rows[0];
     
     if (!lead) {
       return res.status(404).json({ 
@@ -304,7 +363,7 @@ app.get('/api/leads/:id', async (req, res) => {
     
     res.json({ 
       success: true, 
-      lead 
+      lead: mapLeadRow(lead)
     });
   } catch (error) {
     console.error('Fehler beim Abrufen des Leads:', error);
@@ -319,26 +378,30 @@ app.get('/api/leads/:id', async (req, res) => {
 app.put('/api/leads/:id', async (req, res) => {
   try {
     const { status, notes } = req.body;
-    
-    const leads = await readLeads();
-    const leadIndex = leads.findIndex(l => l.id === req.params.id);
-    if (leadIndex === -1) {
+    const now = new Date().toISOString();
+
+    const result = await dbQuery(
+      `UPDATE leads
+       SET status = COALESCE($1, status),
+           notes = COALESCE($2, notes),
+           updated_at = $3
+       WHERE id = $4
+       RETURNING *`,
+      [status || null, notes ?? null, now, req.params.id]
+    );
+
+    const updated = result.rows[0];
+    if (!updated) {
       return res.status(404).json({ 
         success: false, 
         message: 'Lead nicht gefunden' 
       });
     }
 
-    if (status) leads[leadIndex].status = status;
-    if (notes !== undefined) leads[leadIndex].notes = notes;
-    leads[leadIndex].updatedAt = new Date().toISOString();
-
-    await writeLeads(leads);
-    
     res.json({ 
       success: true, 
       message: 'Lead erfolgreich aktualisiert',
-      lead: leads[leadIndex]
+      lead: mapLeadRow(updated)
     });
   } catch (error) {
     console.error('Fehler beim Aktualisieren des Leads:', error);
@@ -352,27 +415,23 @@ app.put('/api/leads/:id', async (req, res) => {
 // DELETE - Delete lead
 app.delete('/api/leads/:id', async (req, res) => {
   try {
-    const leads = await readLeads();
-    const filtered = leads.filter(l => l.id !== req.params.id);
-    
-    if (filtered.length === leads.length) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Lead nicht gefunden' 
+    const result = await dbQuery(`DELETE FROM leads WHERE id = $1 RETURNING id`, [req.params.id]);
+    if (!result.rows[0]) {
+      return res.status(404).json({
+        success: false,
+        message: 'Lead nicht gefunden'
       });
     }
 
-    await writeLeads(filtered);
-    
-    res.json({ 
-      success: true, 
-      message: 'Lead erfolgreich gelÃ¶scht' 
+    res.json({
+      success: true,
+      message: 'Lead erfolgreich gelöscht'
     });
   } catch (error) {
-    console.error('Fehler beim LÃ¶schen des Leads:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Fehler beim LÃ¶schen des Leads' 
+    console.error('Fehler beim Löschen des Leads:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Löschen des Leads'
     });
   }
 });
@@ -380,33 +439,39 @@ app.delete('/api/leads/:id', async (req, res) => {
 // GET - Statistics
 app.get('/api/stats', async (req, res) => {
   try {
-    const leads = await readLeads();
-    const total = leads.length;
-    const neu = leads.filter(l => l.status === 'neu').length;
-    const kontaktiert = leads.filter(l => l.status === 'kontaktiert').length;
-    const abgeschlossen = leads.filter(l => l.status === 'abgeschlossen').length;
-    const packageStats = Object.entries(
-      leads.reduce((acc, lead) => {
-        acc[lead.package] = (acc[lead.package] || 0) + 1;
-        return acc;
-      }, {})
-    ).map(([key, value]) => ({ _id: key, count: value }));
-    
+    const totalsResult = await dbQuery(
+      `SELECT
+         COUNT(*)::int AS total,
+         COUNT(*) FILTER (WHERE status = 'neu')::int AS neu,
+         COUNT(*) FILTER (WHERE status = 'kontaktiert')::int AS kontaktiert,
+         COUNT(*) FILTER (WHERE status = 'abgeschlossen')::int AS abgeschlossen
+       FROM leads`
+    );
+
+    const packagesResult = await dbQuery(
+      `SELECT package AS _id, COUNT(*)::int AS count
+       FROM leads
+       GROUP BY package
+       ORDER BY count DESC`
+    );
+
+    const totals = totalsResult.rows[0] || { total: 0, neu: 0, kontaktiert: 0, abgeschlossen: 0 };
+
     res.json({
       success: true,
       stats: {
-        total,
-        neu,
-        kontaktiert,
-        abgeschlossen,
-        packages: packageStats
+        total: totals.total,
+        neu: totals.neu,
+        kontaktiert: totals.kontaktiert,
+        abgeschlossen: totals.abgeschlossen,
+        packages: packagesResult.rows
       }
     });
   } catch (error) {
     console.error('Fehler beim Abrufen der Statistiken:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Fehler beim Laden der Statistiken' 
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden der Statistiken'
     });
   }
 });
@@ -526,32 +591,47 @@ app.post('/api/blog/posts', async (req, res) => {
       });
     }
 
-    const posts = await readBlogPosts();
     const baseSlug = postData.slug ? slugify(postData.slug) : slugify(postData.title);
-    const slug = ensureUniqueSlug(baseSlug, posts);
+    const slug = await ensureUniqueSlug(baseSlug);
 
     const now = new Date().toISOString();
-    const newPost = {
-      id: randomUUID(),
-      title: postData.title,
-      slug,
-      excerpt: postData.excerpt,
-      content: postData.content,
-      fullContent: Array.isArray(postData.fullContent) ? postData.fullContent : (postData.fullContent ? [postData.fullContent] : []),
-      image: postData.image || '',
-      category: postData.category,
-      metaTitle: postData.metaTitle || '',
-      metaDescription: postData.metaDescription || '',
-      keywords: Array.isArray(postData.keywords) ? postData.keywords : [],
-      status: BLOG_STATUSES.includes(postData.status) ? postData.status : 'draft',
-      aiGenerated: Boolean(postData.aiGenerated),
-      publishedAt: postData.status === 'published' ? (postData.publishedAt || now) : null,
-      createdAt: now,
-      updatedAt: now
-    };
+    const status = BLOG_STATUSES.includes(postData.status) ? postData.status : 'draft';
+    const publishedAt = status === 'published' ? (postData.publishedAt || now) : null;
+    const fullContent = Array.isArray(postData.fullContent)
+      ? postData.fullContent
+      : (postData.fullContent ? [postData.fullContent] : []);
+    const keywords = Array.isArray(postData.keywords) ? postData.keywords : [];
 
-    posts.push(newPost);
-    await writeBlogPosts(posts);
+    const result = await dbQuery(
+      `INSERT INTO blog_posts (
+        id, title, slug, excerpt, content, full_content, image, category,
+        meta_title, meta_description, keywords, status, ai_generated,
+        published_at, created_at, updated_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16
+      )
+      RETURNING *`,
+      [
+        randomUUID(),
+        postData.title,
+        slug,
+        postData.excerpt,
+        postData.content,
+        JSON.stringify(fullContent),
+        postData.image || '',
+        postData.category,
+        postData.metaTitle || '',
+        postData.metaDescription || '',
+        JSON.stringify(keywords),
+        status,
+        Boolean(postData.aiGenerated),
+        publishedAt,
+        now,
+        now
+      ]
+    );
+
+    const newPost = mapBlogRow(result.rows[0]);
 
     res.status(201).json({
       success: true,
@@ -571,28 +651,29 @@ app.post('/api/blog/posts', async (req, res) => {
 app.get('/api/blog/posts', async (req, res) => {
   try {
     const { status, category, sortBy = 'createdAt', order = 'desc' } = req.query;
-    let posts = await readBlogPosts();
 
-    if (status && status !== 'all') {
-      posts = posts.filter(post => post.status === status);
-    }
-    if (category) {
-      posts = posts.filter(post => post.category === category);
-    }
+    const sortMap = {
+      createdAt: 'created_at',
+      updatedAt: 'updated_at',
+      publishedAt: 'published_at',
+      title: 'title',
+      category: 'category',
+      status: 'status'
+    };
+    const sortColumn = sortMap[sortBy] || 'created_at';
+    const sortDirection = order === 'asc' ? 'ASC' : 'DESC';
+    const statusFilter = status && status !== 'all' ? status : null;
+    const categoryFilter = category || null;
 
-    const sortMultiplier = order === 'asc' ? 1 : -1;
-    posts.sort((a, b) => {
-      const aValue = a[sortBy];
-      const bValue = b[sortBy];
-      if (sortBy === 'createdAt' || sortBy === 'updatedAt' || sortBy === 'publishedAt') {
-        return sortMultiplier * (new Date(bValue || 0) - new Date(aValue || 0));
-      }
-      const valA = `${aValue || ''}`.toLowerCase();
-      const valB = `${bValue || ''}`.toLowerCase();
-      if (valA < valB) return -1 * sortMultiplier;
-      if (valA > valB) return sortMultiplier;
-      return 0;
-    });
+    const result = await dbQuery(
+      `SELECT * FROM blog_posts
+       WHERE ($1::text IS NULL OR status = $1)
+         AND ($2::text IS NULL OR category = $2)
+       ORDER BY ${sortColumn} ${sortDirection}`,
+      [statusFilter, categoryFilter]
+    );
+
+    const posts = result.rows.map(mapBlogRow);
 
     res.json({
       success: true,
@@ -600,10 +681,10 @@ app.get('/api/blog/posts', async (req, res) => {
       posts
     });
   } catch (error) {
-    console.error('Fehler beim Abrufen der Blog-BeitrÃ¤ge:', error);
+    console.error('Fehler beim Abrufen der Blog-Beiträge:', error);
     res.status(500).json({
       success: false,
-      message: 'Fehler beim Laden der BeitrÃ¤ge'
+      message: 'Fehler beim Laden der Beiträge'
     });
   }
 });
@@ -611,50 +692,29 @@ app.get('/api/blog/posts', async (req, res) => {
 // GET - Get published blog posts (for frontend)
 app.get('/api/blog/posts/published', async (req, res) => {
   try {
-    const posts = (await readBlogPosts())
-      .filter(post => post.status === 'published')
-      .sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
+    const result = await dbQuery(
+      `SELECT id, title, slug, excerpt, image, category, published_at
+       FROM blog_posts
+       WHERE status = 'published'
+       ORDER BY published_at DESC NULLS LAST, created_at DESC`
+    );
+
+    const posts = result.rows.map(post => ({
+      id: post.id,
+      title: post.title,
+      slug: post.slug,
+      excerpt: post.excerpt,
+      image: post.image || '',
+      category: post.category,
+      publishedAt: post.published_at
+    }));
 
     res.json({
       success: true,
-      posts: posts.map(post => ({
-        id: post.id,
-        title: post.title,
-        slug: post.slug,
-        excerpt: post.excerpt,
-        image: post.image,
-        category: post.category,
-        publishedAt: post.publishedAt
-      }))
+      posts
     });
   } catch (error) {
-    console.error('Fehler beim Abrufen verÃ¶ffentlichter BeitrÃ¤ge:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Fehler beim Laden'
-    });
-  }
-});
-
-// GET - Get single blog post by ID
-app.get('/api/blog/posts/:id', async (req, res) => {
-  try {
-    const posts = await readBlogPosts();
-    const post = posts.find(p => p.id === req.params.id);
-
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Beitrag nicht gefunden'
-      });
-    }
-
-    res.json({
-      success: true,
-      post
-    });
-  } catch (error) {
-    console.error('Fehler beim Abrufen des Beitrags:', error);
+    console.error('Fehler beim Abrufen veröffentlichter Beiträge:', error);
     res.status(500).json({
       success: false,
       message: 'Fehler beim Laden'
@@ -665,8 +725,11 @@ app.get('/api/blog/posts/:id', async (req, res) => {
 // GET - Get blog post by slug (for frontend)
 app.get('/api/blog/posts/slug/:slug', async (req, res) => {
   try {
-    const posts = await readBlogPosts();
-    const post = posts.find(p => p.slug === req.params.slug && p.status === 'published');
+    const result = await dbQuery(
+      `SELECT * FROM blog_posts WHERE slug = $1 AND status = 'published' LIMIT 1`,
+      [req.params.slug]
+    );
+    const post = result.rows[0];
 
     if (!post) {
       return res.status(404).json({
@@ -677,10 +740,36 @@ app.get('/api/blog/posts/slug/:slug', async (req, res) => {
 
     res.json({
       success: true,
-      post
+      post: mapBlogRow(post)
     });
   } catch (error) {
     console.error('Fehler beim Laden:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden'
+    });
+  }
+});
+
+// GET - Get single blog post by ID
+app.get('/api/blog/posts/:id', async (req, res) => {
+  try {
+    const result = await dbQuery(`SELECT * FROM blog_posts WHERE id = $1`, [req.params.id]);
+    const post = result.rows[0];
+
+    if (!post) {
+      return res.status(404).json({
+        success: false,
+        message: 'Beitrag nicht gefunden'
+      });
+    }
+
+    res.json({
+      success: true,
+      post: mapBlogRow(post)
+    });
+  } catch (error) {
+    console.error('Fehler beim Abrufen des Beitrags:', error);
     res.status(500).json({
       success: false,
       message: 'Fehler beim Laden'
@@ -692,54 +781,89 @@ app.get('/api/blog/posts/slug/:slug', async (req, res) => {
 app.put('/api/blog/posts/:id', async (req, res) => {
   try {
     const updates = req.body;
-    const posts = await readBlogPosts();
-    const index = posts.findIndex(p => p.id === req.params.id);
+    const existingResult = await dbQuery(`SELECT * FROM blog_posts WHERE id = $1`, [req.params.id]);
+    const existing = existingResult.rows[0];
 
-    if (index === -1) {
+    if (!existing) {
       return res.status(404).json({
         success: false,
         message: 'Beitrag nicht gefunden'
       });
     }
 
-    const existing = posts[index];
-    const updated = { ...existing };
-
-    const fields = ['title', 'excerpt', 'content', 'fullContent', 'image', 'category', 'metaTitle', 'metaDescription', 'aiGenerated'];
-    fields.forEach(field => {
-      if (updates[field] !== undefined) {
-        updated[field] = updates[field];
-      }
-    });
-
-    if (updates.keywords) {
-      updated.keywords = Array.isArray(updates.keywords) ? updates.keywords : [];
-    }
-
+    let slug = existing.slug;
     if (updates.slug) {
       const slugCandidate = slugify(updates.slug);
-      updated.slug = ensureUniqueSlug(slugCandidate, posts, updated.id);
+      slug = await ensureUniqueSlug(slugCandidate, req.params.id);
     } else if (updates.title && !updates.slug) {
       const slugCandidate = slugify(updates.title) || `post-${Date.now()}`;
-      updated.slug = ensureUniqueSlug(slugCandidate, posts, updated.id);
+      slug = await ensureUniqueSlug(slugCandidate, req.params.id);
     }
 
+    let status = existing.status;
+    let publishedAt = existing.published_at;
     if (updates.status && BLOG_STATUSES.includes(updates.status)) {
-      updated.status = updates.status;
-      if (updates.status === 'published' && !updated.publishedAt) {
-        updated.publishedAt = new Date().toISOString();
+      status = updates.status;
+      if (status === 'published' && !publishedAt) {
+        publishedAt = new Date().toISOString();
       }
     }
+    if (updates.publishedAt !== undefined) {
+      publishedAt = updates.publishedAt;
+    }
 
-    updated.updatedAt = new Date().toISOString();
+    const fullContent = updates.fullContent !== undefined
+      ? (Array.isArray(updates.fullContent)
+        ? updates.fullContent
+        : (updates.fullContent ? [updates.fullContent] : []))
+      : existing.full_content;
+    const keywords = updates.keywords !== undefined
+      ? (Array.isArray(updates.keywords) ? updates.keywords : [])
+      : existing.keywords;
 
-    posts[index] = updated;
-    await writeBlogPosts(posts);
+    const now = new Date().toISOString();
+
+    const result = await dbQuery(
+      `UPDATE blog_posts
+       SET title = $1,
+           slug = $2,
+           excerpt = $3,
+           content = $4,
+           full_content = $5,
+           image = $6,
+           category = $7,
+           meta_title = $8,
+           meta_description = $9,
+           keywords = $10,
+           status = $11,
+           ai_generated = $12,
+           published_at = $13,
+           updated_at = $14
+       WHERE id = $15
+       RETURNING *`,
+      [
+        updates.title ?? existing.title,
+        slug,
+        updates.excerpt ?? existing.excerpt,
+        updates.content ?? existing.content,
+        JSON.stringify(fullContent),
+        updates.image ?? existing.image,
+        updates.category ?? existing.category,
+        updates.metaTitle ?? existing.meta_title,
+        updates.metaDescription ?? existing.meta_description,
+        JSON.stringify(keywords),
+        status,
+        updates.aiGenerated !== undefined ? Boolean(updates.aiGenerated) : existing.ai_generated,
+        publishedAt,
+        now,
+        req.params.id
+      ]
+    );
 
     res.json({
       success: true,
       message: 'Beitrag erfolgreich aktualisiert',
-      post: updated
+      post: mapBlogRow(result.rows[0])
     });
   } catch (error) {
     console.error('Fehler beim Aktualisieren:', error);
@@ -753,21 +877,19 @@ app.put('/api/blog/posts/:id', async (req, res) => {
 // DELETE - Delete blog post
 app.delete('/api/blog/posts/:id', async (req, res) => {
   try {
-    const posts = await readBlogPosts();
-    const index = posts.findIndex(p => p.id === req.params.id);
+    const result = await dbQuery(`DELETE FROM blog_posts WHERE id = $1 RETURNING *`, [req.params.id]);
+    const deleted = result.rows[0];
 
-    if (index === -1) {
+    if (!deleted) {
       return res.status(404).json({
         success: false,
         message: 'Beitrag nicht gefunden'
       });
     }
 
-    const [deleted] = posts.splice(index, 1);
-    await writeBlogPosts(posts);
-
     if (deleted.image && deleted.image.startsWith('/uploads/')) {
-      const imagePath = path.join(__dirname, deleted.image);
+      const relativePath = deleted.image.replace(/^\/uploads\//, '');
+      const imagePath = path.join(uploadsBaseDir, relativePath);
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }
@@ -775,13 +897,13 @@ app.delete('/api/blog/posts/:id', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Beitrag erfolgreich gelÃ¶scht'
+      message: 'Beitrag erfolgreich gelöscht'
     });
   } catch (error) {
-    console.error('Fehler beim LÃ¶schen:', error);
+    console.error('Fehler beim Löschen:', error);
     res.status(500).json({
       success: false,
-      message: 'Fehler beim LÃ¶schen'
+      message: 'Fehler beim Löschen'
     });
   }
 });
@@ -794,8 +916,8 @@ app.get('/health', (req, res) => {
 // Export for Vercel Serverless
 module.exports = app;
 
-// Start server only in development and when not in Vercel environment
-if (process.env.NODE_ENV !== 'production' && !process.env.VERCEL) {
+// Start server when not running as Vercel serverless
+if (!process.env.VERCEL) {
   app.listen(PORT, () => {
     console.log(`ðŸš€ Server lÃ¤uft auf Port ${PORT}`);
   });
