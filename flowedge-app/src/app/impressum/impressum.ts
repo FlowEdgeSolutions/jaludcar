@@ -1,8 +1,9 @@
 import { Component } from '@angular/core';
+import { Navbar } from '../navbar/navbar';
 
 @Component({
   selector: 'app-impressum',
-  imports: [],
+  imports: [Navbar],
   templateUrl: './impressum.html',
   styleUrl: './impressum.scss',
 })

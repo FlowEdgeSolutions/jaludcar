@@ -1,6 +1,12 @@
-import { Component } from '@angular/core';
+﻿import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { RouterModule } from '@angular/router';
+
+interface NavLink {
+  label: string;
+  link: string;
+  fragment?: string;
+}
 
 @Component({
   selector: 'app-navbar',
@@ -10,13 +16,24 @@ import { RouterModule } from '@angular/router';
   styleUrl: './navbar.scss'
 })
 export class Navbar {
-  mobileMenuOpen = false;
+  isMenuOpen = false;
 
-  toggleMobileMenu() {
-    this.mobileMenuOpen = !this.mobileMenuOpen;
+  readonly navLinks: NavLink[] = [
+    { label: 'Über JALUD', link: '/', fragment: 'ueber-jalud' },
+    { label: 'Unsere Leistungen', link: '/', fragment: 'leistungen' },
+    { label: 'Preise', link: '/', fragment: 'preise' },
+    { label: 'Blog', link: '/blog' },
+    { label: 'Kontakt', link: '/', fragment: 'kontakt' },
+    { label: 'Impressum', link: '/impressum' },
+    { label: 'Datenschutz', link: '/datenschutz' },
+    { label: 'AGB', link: '/agb' }
+  ];
+
+  toggleMenu() {
+    this.isMenuOpen = !this.isMenuOpen;
   }
 
-  closeMobileMenu() {
-    this.mobileMenuOpen = false;
+  closeMenu() {
+    this.isMenuOpen = false;
   }
 }

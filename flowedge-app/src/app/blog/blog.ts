@@ -1,6 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { Navbar } from '../navbar/navbar';
 
 interface BlogPost {
   id: number | string;
@@ -16,7 +17,7 @@ interface BlogPost {
 
 @Component({
   selector: 'app-blog',
-  imports: [CommonModule, HttpClientModule],
+  imports: [CommonModule, HttpClientModule, Navbar],
   templateUrl: './blog.html',
   styleUrl: './blog.scss',
 })

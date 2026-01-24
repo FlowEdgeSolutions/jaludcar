@@ -1,35 +1,26 @@
-<nav class="navbar">
+﻿<nav class="navbar" [class.open]="isMenuOpen">
   <div class="nav-container">
-    <div class="logo">
-      <a href="/">
-        <img src="/logojalud.png" alt="JALUD Logo" class="logo-img">
-      </a>
-    </div>
-    
-    <ul class="nav-menu">
-      <li><a routerLink="/" fragment="ueber-jalud">Über JALUD</a></li>
-      <li><a routerLink="/" fragment="leistungen">Unsere Leistungen</a></li>
-      <li><a routerLink="/" fragment="preise">Preise</a></li>
-      <li><a routerLink="/blog">Blog</a></li>
-      <li><a routerLink="/" fragment="kontakt">Kontakt</a></li>
-    </ul>
-    
-    <button class="mobile-menu-btn" (click)="toggleMobileMenu()" [class.active]="mobileMenuOpen">
+    <a routerLink="/" class="logo" aria-label="Zur Startseite" (click)="closeMenu()">
+      <img src="/logojalud.png" alt="JALUD Logo" class="logo-img">
+    </a>
+
+    <button
+      type="button"
+      class="navbar-toggler"
+      (click)="toggleMenu()"
+      [attr.aria-expanded]="isMenuOpen"
+      aria-label="Navigation ein- oder ausblenden">
       <span></span>
       <span></span>
       <span></span>
     </button>
-  </div>
-  
-  <div class="mobile-menu-overlay" [class.active]="mobileMenuOpen" (click)="closeMobileMenu()"></div>
-  
-  <div class="mobile-menu" [class.active]="mobileMenuOpen">
-    <ul>
-      <li><a routerLink="/" fragment="ueber-jalud" (click)="closeMobileMenu()">Über JALUD</a></li>
-      <li><a routerLink="/" fragment="leistungen" (click)="closeMobileMenu()">Unsere Leistungen</a></li>
-      <li><a routerLink="/" fragment="preise" (click)="closeMobileMenu()">Preise</a></li>
-      <li><a routerLink="/blog" (click)="closeMobileMenu()">Blog</a></li>
-      <li><a routerLink="/" fragment="kontakt" (click)="closeMobileMenu()">Kontakt</a></li>
+
+    <ul class="nav-menu" [class.menu-visible]="isMenuOpen">
+      <li *ngFor="let item of navLinks">
+        <a [routerLink]="item.link" [fragment]="item.fragment" (click)="closeMenu()">
+          {{ item.label }}
+        </a>
+      </li>
     </ul>
   </div>
 </nav>
