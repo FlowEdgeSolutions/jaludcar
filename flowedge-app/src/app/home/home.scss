@@ -246,6 +246,7 @@ $glass-border: rgba(0, 0, 0, 0.1);
     background: #f9f9f9;
     cursor: ew-resize;
     user-select: none;
+    touch-action: none;
     
     @media (max-width: 768px) {
       min-height: 300px;

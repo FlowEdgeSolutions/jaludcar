@@ -77,7 +77,7 @@ export class Home {
   }
   
   private updateSliderPosition(event: MouseEvent) {
-    const target = event.currentTarget as HTMLElement;
+    const target = event.currentTarget as HTMLElement | null;
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const x = event.clientX - rect.left;
@@ -87,7 +87,7 @@ export class Home {
   
   private updateSliderPositionTouch(event: TouchEvent) {
     event.preventDefault();
-    const target = event.currentTarget as HTMLElement;
+    const target = event.currentTarget as HTMLElement | null;
     if (!target) return;
     const rect = target.getBoundingClientRect();
     const x = event.touches[0].clientX - rect.left;
