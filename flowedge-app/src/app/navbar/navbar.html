@@ -1,0 +1,35 @@
+<nav class="navbar">
+  <div class="nav-container">
+    <div class="logo">
+      <a href="/">
+        <img src="/logojalud.png" alt="JALUD Logo" class="logo-img">
+      </a>
+    </div>
+    
+    <ul class="nav-menu">
+      <li><a routerLink="/" fragment="ueber-jalud">Über JALUD</a></li>
+      <li><a routerLink="/" fragment="leistungen">Unsere Leistungen</a></li>
+      <li><a routerLink="/" fragment="preise">Preise</a></li>
+      <li><a routerLink="/blog">Blog</a></li>
+      <li><a routerLink="/" fragment="kontakt">Kontakt</a></li>
+    </ul>
+    
+    <button class="mobile-menu-btn" (click)="toggleMobileMenu()" [class.active]="mobileMenuOpen">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+  </div>
+  
+  <div class="mobile-menu-overlay" [class.active]="mobileMenuOpen" (click)="closeMobileMenu()"></div>
+  
+  <div class="mobile-menu" [class.active]="mobileMenuOpen">
+    <ul>
+      <li><a routerLink="/" fragment="ueber-jalud" (click)="closeMobileMenu()">Über JALUD</a></li>
+      <li><a routerLink="/" fragment="leistungen" (click)="closeMobileMenu()">Unsere Leistungen</a></li>
+      <li><a routerLink="/" fragment="preise" (click)="closeMobileMenu()">Preise</a></li>
+      <li><a routerLink="/blog" (click)="closeMobileMenu()">Blog</a></li>
+      <li><a routerLink="/" fragment="kontakt" (click)="closeMobileMenu()">Kontakt</a></li>
+    </ul>
+  </div>
+</nav>

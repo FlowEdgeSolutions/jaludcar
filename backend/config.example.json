@@ -1,9 +1,7 @@
 {
-  "azureOpenAI": {
-    "endpoint": "YOUR_AZURE_ENDPOINT",
-    "apiKey": "YOUR_API_KEY_HERE",
-    "deploymentName": "gpt-4.1_jalud_blog",
-    "apiVersion": "2025-01-01-preview"
+  "gemini": {
+    "apiKey": "YOUR_GEMINI_API_KEY",
+    "model": "gemini-3-flash-preview"
   },
   "blog": {
     "imagesPath": "public/images/blog",

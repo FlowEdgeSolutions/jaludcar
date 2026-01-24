@@ -1,72 +1,172 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-
-// Try to import Vercel functions, but don't fail if not available
-let attachDatabasePool;
-try {
-  const vercelFunctions = require('@vercel/functions');
-  attachDatabasePool = vercelFunctions.attachDatabasePool;
-} catch (e) {
-  console.log('⚠️  @vercel/functions not available (optional optimization)');
-  attachDatabasePool = null;
-}
+const { randomUUID } = require('crypto');
+const { GoogleGenAI } = require('@google/genai');
 
 require('dotenv').config();
-
-// Optional: Azure OpenAI (nur für Blog-Generierung)
-let AzureOpenAI;
-try {
-  AzureOpenAI = require('openai').AzureOpenAI;
-} catch (e) {
-  console.log('⚠️  Azure OpenAI nicht verfügbar (nur für Blog-Generierung benötigt)');
-}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Load config from environment variables or config.json
-let config;
+const defaultConfig = {
+  gemini: {
+    apiKey: '',
+    model: 'gemini-3-flash-preview'
+  },
+  blog: {
+    imagesPath: 'public/images/blog',
+    postsPath: 'backend/data/blog-posts.json'
+  },
+  email: {
+    host: '',
+    port: 465,
+    secure: true,
+    user: '',
+    password: '',
+    from: '',
+    adminEmail: ''
+  }
+};
+
+// Load config from config.json if present
+let config = { ...defaultConfig };
 try {
-  // For Vercel: Use environment variables
-  if (process.env.MONGODB_URI) {
+  const configPath = path.join(__dirname, 'config.json');
+  if (fs.existsSync(configPath)) {
+    const localConfig = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
     config = {
-      azureOpenAI: {
-        endpoint: process.env.AZURE_OPENAI_ENDPOINT || '',
-        apiKey: process.env.AZURE_OPENAI_API_KEY || '',
-        deploymentName: process.env.AZURE_OPENAI_DEPLOYMENT || 'gpt-4.1_jalud_blog',
-        apiVersion: process.env.AZURE_OPENAI_API_VERSION || '2025-01-01-preview'
+      ...defaultConfig,
+      ...localConfig,
+      gemini: {
+        ...defaultConfig.gemini,
+        ...(localConfig.gemini || {})
       },
       blog: {
-        imagesPath: 'public/images/blog',
-        postsPath: 'backend/data/blog-posts.json'
+        ...defaultConfig.blog,
+        ...(localConfig.blog || {})
       },
       email: {
-        host: process.env.EMAIL_HOST || 'smtp.strato.de',
-        port: parseInt(process.env.EMAIL_PORT || '465'),
-        secure: process.env.EMAIL_SECURE === 'true',
-        user: process.env.EMAIL_USER || '',
-        password: process.env.EMAIL_PASSWORD || '',
-        from: process.env.EMAIL_FROM || '',
-        adminEmail: process.env.EMAIL_ADMIN || ''
+        ...defaultConfig.email,
+        ...(localConfig.email || {})
       }
     };
-  } else {
-    // For local development: Use config.json
-    config = JSON.parse(fs.readFileSync(path.join(__dirname, 'config.json'), 'utf-8'));
   }
 } catch (error) {
   console.error('⚠️  Konfigurationsfehler:', error.message);
-  config = {
-    azureOpenAI: { endpoint: '', apiKey: '', deploymentName: 'gpt-4.1_jalud_blog', apiVersion: '2025-01-01-preview' },
-    blog: { imagesPath: 'public/images/blog', postsPath: 'backend/data/blog-posts.json' },
-    email: { host: '', port: 465, secure: true, user: '', password: '', from: '', adminEmail: '' }
-  };
+  config = { ...defaultConfig };
 }
+
+config.gemini.apiKey = process.env.GEMINI_API_KEY || config.gemini.apiKey;
+config.gemini.model = process.env.GEMINI_MODEL || config.gemini.model;
+config.blog.imagesPath = config.blog.imagesPath || defaultConfig.blog.imagesPath;
+config.blog.postsPath = config.blog.postsPath || defaultConfig.blog.postsPath;
+config.email = {
+  host: process.env.EMAIL_HOST || config.email.host,
+  port: parseInt(process.env.EMAIL_PORT || `${config.email.port}`, 10),
+  secure: process.env.EMAIL_SECURE ? process.env.EMAIL_SECURE === 'true' : config.email.secure,
+  user: process.env.EMAIL_USER || config.email.user,
+  password: process.env.EMAIL_PASSWORD || config.email.password,
+  from: process.env.EMAIL_FROM || config.email.from,
+  adminEmail: process.env.EMAIL_ADMIN || config.email.adminEmail
+};
+
+const geminiApiKey = config.gemini.apiKey;
+const geminiModel = config.gemini.model || defaultConfig.gemini.model;
+let geminiClient = null;
+if (geminiApiKey) {
+  try {
+    geminiClient = new GoogleGenAI({ apiKey: geminiApiKey });
+    console.log('✅ Gemini API konfiguriert');
+  } catch (e) {
+    console.log('⚠️  Gemini API konnte nicht initialisiert werden:', e.message);
+  }
+} else {
+  console.log('⚠️  Gemini API nicht konfiguriert (nur für Blog-Generierung benötigt).');
+}
+
+// Helpers for file-based lead storage
+const leadsFilePath = path.join(__dirname, 'data', 'leads.json');
+
+async function ensureLeadsFile() {
+  const dir = path.dirname(leadsFilePath);
+  await fs.promises.mkdir(dir, { recursive: true });
+  try {
+    await fs.promises.access(leadsFilePath);
+  } catch (err) {
+    await fs.promises.writeFile(leadsFilePath, '[]', 'utf8');
+  }
+}
+
+async function readLeads() {
+  await ensureLeadsFile();
+  const raw = await fs.promises.readFile(leadsFilePath, 'utf8');
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+async function writeLeads(leads) {
+  await ensureLeadsFile();
+  await fs.promises.writeFile(leadsFilePath, JSON.stringify(leads, null, 2), 'utf8');
+}
+
+// Helpers for file-based blog storage
+const blogPostsFilePath = path.join(__dirname, 'data', 'blog-posts.json');
+
+async function ensureBlogPostsFile() {
+  const dir = path.dirname(blogPostsFilePath);
+  await fs.promises.mkdir(dir, { recursive: true });
+  try {
+    await fs.promises.access(blogPostsFilePath);
+  } catch (err) {
+    await fs.promises.writeFile(blogPostsFilePath, '[]', 'utf8');
+  }
+}
+
+async function readBlogPosts() {
+  await ensureBlogPostsFile();
+  const raw = await fs.promises.readFile(blogPostsFilePath, 'utf8');
+  if (!raw) return [];
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return [];
+  }
+}
+
+async function writeBlogPosts(posts) {
+  await ensureBlogPostsFile();
+  await fs.promises.writeFile(blogPostsFilePath, JSON.stringify(posts, null, 2), 'utf8');
+}
+
+function slugify(text = '') {
+  return text
+    .toLowerCase()
+    .replace(/ä/g, 'ae')
+    .replace(/ö/g, 'oe')
+    .replace(/ü/g, 'ue')
+    .replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function ensureUniqueSlug(baseSlug, posts, excludeId) {
+  let candidate = baseSlug || `post-${Date.now()}`;
+  while (posts.some(p => p.slug === candidate && p.id !== excludeId)) {
+    candidate = `${candidate}-${Math.floor(Math.random() * 1000)}`;
+  }
+  return candidate;
+}
+
+const BLOG_STATUSES = ['draft', 'published', 'archived'];
+
 
 // Middleware
 app.use(cors());
@@ -104,143 +204,13 @@ const upload = multer({
   }
 });
 
-// MongoDB Connection
-// Support both MONGODB_URI and jaludcar_MONGODB_URI (Vercel integration)
-let MONGODB_URI = process.env.jaludcar_MONGODB_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/jalud-leads';
-
-// Ensure database name is always included in the URI
-if (MONGODB_URI && !MONGODB_URI.includes('/jalud-leads')) {
-  // Add database name before query params
-  MONGODB_URI = MONGODB_URI.replace(/\/\?/, '/jalud-leads?');
-  // If no query params, add at the end
-  if (!MONGODB_URI.includes('?')) {
-    MONGODB_URI = MONGODB_URI.replace(/\/$/, '') + '/jalud-leads';
-  }
-}
-
-// Ensure required parameters are present
-if (!MONGODB_URI.includes('retryWrites=')) {
-  MONGODB_URI += (MONGODB_URI.includes('?') ? '&' : '?') + 'retryWrites=true';
-}
-if (!MONGODB_URI.includes('w=majority')) {
-  MONGODB_URI += '&w=majority';
-}
-if (!MONGODB_URI.includes('appName=')) {
-  MONGODB_URI += '&appName=jaludcarmongodb';
-}
-
-console.log('📊 MongoDB URI configured (database: jalud-leads)');
-
-let isMongoConnected = false;
-let mongoClient = null;
-
-// Connect to MongoDB with Vercel optimization
-async function connectToDatabase() {
-  if (isMongoConnected && mongoose.connection.readyState === 1) {
-    return Promise.resolve();
-  }
-  
-  try {
-    await mongoose.connect(MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    });
-    
-    // Attach database pool for Vercel Functions (if available)
-    if (attachDatabasePool && mongoose.connection.getClient) {
-      try {
-        mongoClient = mongoose.connection.getClient();
-        attachDatabasePool(mongoClient);
-        console.log('✅ Vercel Database Pool attached');
-      } catch (poolErr) {
-        console.log('⚠️  Database pool attachment skipped:', poolErr.message);
-      }
-    }
-    
-    isMongoConnected = true;
-    console.log('✅ MongoDB verbunden');
-  } catch (err) {
-    console.error('❌ MongoDB Verbindungsfehler:', err.message);
-    isMongoConnected = false;
-    throw err;
-  }
-}
-
-// Initialize connection
-connectToDatabase().catch(err => {
-  console.error('❌ Initiale MongoDB-Verbindung fehlgeschlagen:', err.message);
-});
-
-// Lead Schema
-const leadSchema = new mongoose.Schema({
-  firstName: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  lastName: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  phone: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  email: {
-    type: String,
-    required: true,
-    trim: true,
-    lowercase: true
-  },
-  package: {
-    type: String,
-    required: true,
-    enum: ['basic', 'premium', 'luxus', 'beratung']
-  },
-  message: {
-    type: String,
-    trim: true
-  },
-  status: {
-    type: String,
-    enum: ['neu', 'kontaktiert', 'abgeschlossen', 'abgelehnt'],
-    default: 'neu'
-  },
-  notes: {
-    type: String,
-    default: ''
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-// Update updatedAt on save
-leadSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  next();
-});
-
-const Lead = mongoose.model('Lead', leadSchema);
-
 // Routes
 
 // POST - Create new lead
 app.post('/api/leads', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
     const { firstName, lastName, phone, email, package: pkg, message } = req.body;
     
-    // Validation
     if (!firstName || !lastName || !phone || !email || !pkg) {
       return res.status(400).json({ 
         success: false, 
@@ -248,23 +218,30 @@ app.post('/api/leads', async (req, res) => {
       });
     }
 
-    const lead = new Lead({
+    const leads = await readLeads();
+    const newLead = {
+      id: randomUUID(),
       firstName,
       lastName,
       phone,
       email,
       package: pkg,
-      message: message || ''
-    });
+      message: message || '',
+      status: 'neu',
+      notes: '',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
 
-    await lead.save();
-    console.log('✅ Lead gespeichert:', lead._id);
+    leads.push(newLead);
+    await writeLeads(leads);
     
-    // Return success immediately after saving lead
+    console.log('✅ Lead gespeichert:', newLead.id);
+    
     res.status(201).json({ 
       success: true, 
       message: 'Anfrage erfolgreich gesendet!',
-      leadId: lead._id
+      leadId: newLead.id
     });
   } catch (error) {
     console.error('❌ Fehler beim Erstellen des Leads:', error);
@@ -278,16 +255,25 @@ app.post('/api/leads', async (req, res) => {
 // GET - Get all leads (Admin)
 app.get('/api/leads', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
     const { status, sortBy = 'createdAt', order = 'desc' } = req.query;
     
-    const filter = {};
-    if (status) filter.status = status;
-    
-    const sortOrder = order === 'asc' ? 1 : -1;
-    const leads = await Lead.find(filter).sort({ [sortBy]: sortOrder });
+    let leads = await readLeads();
+    if (status && status !== 'all') {
+      leads = leads.filter(lead => lead.status === status);
+    }
+
+    leads.sort((a, b) => {
+      if (sortBy === 'createdAt' || sortBy === 'updatedAt') {
+        const dateA = new Date(a[sortBy]);
+        const dateB = new Date(b[sortBy]);
+        return order === 'asc' ? dateA - dateB : dateB - dateA;
+      }
+      const valueA = `${a[sortBy] || ''}`.toLowerCase();
+      const valueB = `${b[sortBy] || ''}`.toLowerCase();
+      if (valueA < valueB) return order === 'asc' ? -1 : 1;
+      if (valueA > valueB) return order === 'asc' ? 1 : -1;
+      return 0;
+    });
     
     res.json({ 
       success: true, 
@@ -306,10 +292,8 @@ app.get('/api/leads', async (req, res) => {
 // GET - Get single lead
 app.get('/api/leads/:id', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
-    const lead = await Lead.findById(req.params.id);
+    const leads = await readLeads();
+    const lead = leads.find(l => l.id === req.params.id);
     
     if (!lead) {
       return res.status(404).json({ 
@@ -334,33 +318,27 @@ app.get('/api/leads/:id', async (req, res) => {
 // PUT - Update lead
 app.put('/api/leads/:id', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
     const { status, notes } = req.body;
     
-    const updateData = {};
-    if (status) updateData.status = status;
-    if (notes !== undefined) updateData.notes = notes;
-    updateData.updatedAt = Date.now();
-    
-    const lead = await Lead.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
-    
-    if (!lead) {
+    const leads = await readLeads();
+    const leadIndex = leads.findIndex(l => l.id === req.params.id);
+    if (leadIndex === -1) {
       return res.status(404).json({ 
         success: false, 
         message: 'Lead nicht gefunden' 
       });
     }
+
+    if (status) leads[leadIndex].status = status;
+    if (notes !== undefined) leads[leadIndex].notes = notes;
+    leads[leadIndex].updatedAt = new Date().toISOString();
+
+    await writeLeads(leads);
     
     res.json({ 
       success: true, 
       message: 'Lead erfolgreich aktualisiert',
-      lead 
+      lead: leads[leadIndex]
     });
   } catch (error) {
     console.error('Fehler beim Aktualisieren des Leads:', error);
@@ -374,17 +352,17 @@ app.put('/api/leads/:id', async (req, res) => {
 // DELETE - Delete lead
 app.delete('/api/leads/:id', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
+    const leads = await readLeads();
+    const filtered = leads.filter(l => l.id !== req.params.id);
     
-    const lead = await Lead.findByIdAndDelete(req.params.id);
-    
-    if (!lead) {
+    if (filtered.length === leads.length) {
       return res.status(404).json({ 
         success: false, 
         message: 'Lead nicht gefunden' 
       });
     }
+
+    await writeLeads(filtered);
     
     res.json({ 
       success: true, 
@@ -402,25 +380,25 @@ app.delete('/api/leads/:id', async (req, res) => {
 // GET - Statistics
 app.get('/api/stats', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
-    const totalLeads = await Lead.countDocuments();
-    const neuLeads = await Lead.countDocuments({ status: 'neu' });
-    const kontaktiertLeads = await Lead.countDocuments({ status: 'kontaktiert' });
-    const abgeschlossenLeads = await Lead.countDocuments({ status: 'abgeschlossen' });
-    
-    const packageStats = await Lead.aggregate([
-      { $group: { _id: '$package', count: { $sum: 1 } } }
-    ]);
+    const leads = await readLeads();
+    const total = leads.length;
+    const neu = leads.filter(l => l.status === 'neu').length;
+    const kontaktiert = leads.filter(l => l.status === 'kontaktiert').length;
+    const abgeschlossen = leads.filter(l => l.status === 'abgeschlossen').length;
+    const packageStats = Object.entries(
+      leads.reduce((acc, lead) => {
+        acc[lead.package] = (acc[lead.package] || 0) + 1;
+        return acc;
+      }, {})
+    ).map(([key, value]) => ({ _id: key, count: value }));
     
     res.json({
       success: true,
       stats: {
-        total: totalLeads,
-        neu: neuLeads,
-        kontaktiert: kontaktiertLeads,
-        abgeschlossen: abgeschlossenLeads,
+        total,
+        neu,
+        kontaktiert,
+        abgeschlossen,
         packages: packageStats
       }
     });
@@ -433,114 +411,7 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// ============================================
-// BLOG POST ROUTES
-// ============================================
-
-// Blog Post Schema
-const blogPostSchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true,
-    trim: true
-  },
-  slug: {
-    type: String,
-    required: true,
-    unique: true,
-    trim: true
-  },
-  excerpt: {
-    type: String,
-    required: true,
-    maxlength: 300
-  },
-  content: {
-    type: String,
-    required: true
-  },
-  fullContent: {
-    type: [String],
-    default: []
-  },
-  image: {
-    type: String,
-    default: ''
-  },
-  category: {
-    type: String,
-    required: true
-  },
-  metaTitle: {
-    type: String,
-    default: ''
-  },
-  metaDescription: {
-    type: String,
-    default: ''
-  },
-  keywords: {
-    type: [String],
-    default: []
-  },
-  status: {
-    type: String,
-    enum: ['draft', 'published', 'archived'],
-    default: 'draft'
-  },
-  aiGenerated: {
-    type: Boolean,
-    default: false
-  },
-  publishedAt: {
-    type: Date
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  },
-  updatedAt: {
-    type: Date,
-    default: Date.now
-  }
-});
-
-blogPostSchema.pre('save', function(next) {
-  this.updatedAt = Date.now();
-  if (!this.slug) {
-    this.slug = this.title
-      .toLowerCase()
-      .replace(/ä/g, 'ae')
-      .replace(/ö/g, 'oe')
-      .replace(/ü/g, 'ue')
-      .replace(/ß/g, 'ss')
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
-  }
-  next();
-});
-
-const BlogPost = mongoose.model('BlogPost', blogPostSchema);
-
-// Initialize Azure OpenAI Client
-let azureOpenAI = null;
-if (AzureOpenAI && config.azureOpenAI.apiKey && config.azureOpenAI.apiKey !== 'YOUR_API_KEY_HERE') {
-  try {
-    azureOpenAI = new AzureOpenAI({
-      apiKey: config.azureOpenAI.apiKey,
-      endpoint: config.azureOpenAI.endpoint,
-      apiVersion: config.azureOpenAI.apiVersion,
-      deployment: config.azureOpenAI.deploymentName
-    });
-    console.log('✅ Azure OpenAI konfiguriert');
-  } catch (e) {
-    console.log('⚠️  Azure OpenAI konnte nicht initialisiert werden:', e.message);
-  }
-} else {
-  console.log('⚠️  Azure OpenAI nicht konfiguriert (nur für Blog-Generierung benötigt).');
-}
-
-// POST - Generate blog post with Azure OpenAI
+// POST - Generate blog post with Gemini
 app.post('/api/blog/generate', async (req, res) => {
   try {
     const { topic, keywords, category, tone = 'professional' } = req.body;
@@ -552,10 +423,10 @@ app.post('/api/blog/generate', async (req, res) => {
       });
     }
     
-    if (!azureOpenAI) {
+    if (!geminiClient) {
       return res.status(503).json({
         success: false,
-        message: 'Azure OpenAI ist nicht konfiguriert. Bitte API-Key in config.json hinzufügen.'
+        message: 'Gemini API ist nicht konfiguriert. Bitte GEMINI_API_KEY setzen.'
       });
     }
     
@@ -594,17 +465,16 @@ Format als JSON:
   "suggestedKeywords": ["keyword1", "keyword2", ...]
 }`;
     
-    const completion = await azureOpenAI.chat.completions.create({
-      model: config.azureOpenAI.deploymentName,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userPrompt }
-      ],
-      temperature: 0.7,
-      max_tokens: 2000
+    const response = await geminiClient.models.generateContent({
+      model: geminiModel,
+      contents: [systemPrompt, userPrompt],
+      config: {
+        thinkingConfig: { thinkingLevel: 'MEDIUM' },
+        temperature: 0.7
+      }
     });
     
-    const generatedContent = JSON.parse(completion.choices[0].message.content);
+    const generatedContent = JSON.parse(response.text);
     
     res.json({
       success: true,
@@ -618,7 +488,6 @@ Format als JSON:
     });
   }
 });
-
 // POST - Upload blog image
 app.post('/api/blog/upload-image', upload.single('image'), (req, res) => {
   try {
@@ -648,18 +517,46 @@ app.post('/api/blog/upload-image', upload.single('image'), (req, res) => {
 // POST - Create blog post
 app.post('/api/blog/posts', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
     const postData = req.body;
-    
-    const blogPost = new BlogPost(postData);
-    await blogPost.save();
-    
+
+    if (!postData.title || !postData.excerpt || !postData.content || !postData.category) {
+      return res.status(400).json({
+        success: false,
+        message: 'Titel, Auszug, Inhalt und Kategorie sind erforderlich'
+      });
+    }
+
+    const posts = await readBlogPosts();
+    const baseSlug = postData.slug ? slugify(postData.slug) : slugify(postData.title);
+    const slug = ensureUniqueSlug(baseSlug, posts);
+
+    const now = new Date().toISOString();
+    const newPost = {
+      id: randomUUID(),
+      title: postData.title,
+      slug,
+      excerpt: postData.excerpt,
+      content: postData.content,
+      fullContent: Array.isArray(postData.fullContent) ? postData.fullContent : (postData.fullContent ? [postData.fullContent] : []),
+      image: postData.image || '',
+      category: postData.category,
+      metaTitle: postData.metaTitle || '',
+      metaDescription: postData.metaDescription || '',
+      keywords: Array.isArray(postData.keywords) ? postData.keywords : [],
+      status: BLOG_STATUSES.includes(postData.status) ? postData.status : 'draft',
+      aiGenerated: Boolean(postData.aiGenerated),
+      publishedAt: postData.status === 'published' ? (postData.publishedAt || now) : null,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    posts.push(newPost);
+    await writeBlogPosts(posts);
+
     res.status(201).json({
       success: true,
       message: 'Blog-Beitrag erfolgreich erstellt',
-      post: blogPost
+      post: newPost
     });
   } catch (error) {
     console.error('Fehler beim Erstellen des Blog-Beitrags:', error);
@@ -673,18 +570,30 @@ app.post('/api/blog/posts', async (req, res) => {
 // GET - Get all blog posts
 app.get('/api/blog/posts', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
     const { status, category, sortBy = 'createdAt', order = 'desc' } = req.query;
-    
-    const filter = {};
-    if (status) filter.status = status;
-    if (category) filter.category = category;
-    
-    const sortOrder = order === 'asc' ? 1 : -1;
-    const posts = await BlogPost.find(filter).sort({ [sortBy]: sortOrder });
-    
+    let posts = await readBlogPosts();
+
+    if (status && status !== 'all') {
+      posts = posts.filter(post => post.status === status);
+    }
+    if (category) {
+      posts = posts.filter(post => post.category === category);
+    }
+
+    const sortMultiplier = order === 'asc' ? 1 : -1;
+    posts.sort((a, b) => {
+      const aValue = a[sortBy];
+      const bValue = b[sortBy];
+      if (sortBy === 'createdAt' || sortBy === 'updatedAt' || sortBy === 'publishedAt') {
+        return sortMultiplier * (new Date(bValue || 0) - new Date(aValue || 0));
+      }
+      const valA = `${aValue || ''}`.toLowerCase();
+      const valB = `${bValue || ''}`.toLowerCase();
+      if (valA < valB) return -1 * sortMultiplier;
+      if (valA > valB) return sortMultiplier;
+      return 0;
+    });
+
     res.json({
       success: true,
       count: posts.length,
@@ -702,17 +611,14 @@ app.get('/api/blog/posts', async (req, res) => {
 // GET - Get published blog posts (for frontend)
 app.get('/api/blog/posts/published', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
-    const posts = await BlogPost.find({ status: 'published' })
-      .sort({ publishedAt: -1 })
-      .select('-fullContent');
-    
+    const posts = (await readBlogPosts())
+      .filter(post => post.status === 'published')
+      .sort((a, b) => new Date(b.publishedAt || 0) - new Date(a.publishedAt || 0));
+
     res.json({
       success: true,
       posts: posts.map(post => ({
-        id: post._id,
+        id: post.id,
         title: post.title,
         slug: post.slug,
         excerpt: post.excerpt,
@@ -733,18 +639,16 @@ app.get('/api/blog/posts/published', async (req, res) => {
 // GET - Get single blog post by ID
 app.get('/api/blog/posts/:id', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
-    const post = await BlogPost.findById(req.params.id);
-    
+    const posts = await readBlogPosts();
+    const post = posts.find(p => p.id === req.params.id);
+
     if (!post) {
       return res.status(404).json({
         success: false,
         message: 'Beitrag nicht gefunden'
       });
     }
-    
+
     res.json({
       success: true,
       post
@@ -761,27 +665,22 @@ app.get('/api/blog/posts/:id', async (req, res) => {
 // GET - Get blog post by slug (for frontend)
 app.get('/api/blog/posts/slug/:slug', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
-    const post = await BlogPost.findOne({ 
-      slug: req.params.slug,
-      status: 'published'
-    });
-    
+    const posts = await readBlogPosts();
+    const post = posts.find(p => p.slug === req.params.slug && p.status === 'published');
+
     if (!post) {
       return res.status(404).json({
         success: false,
         message: 'Beitrag nicht gefunden'
       });
     }
-    
+
     res.json({
       success: true,
       post
     });
   } catch (error) {
-    console.error('Fehler:', error);
+    console.error('Fehler beim Laden:', error);
     res.status(500).json({
       success: false,
       message: 'Fehler beim Laden'
@@ -792,32 +691,55 @@ app.get('/api/blog/posts/slug/:slug', async (req, res) => {
 // PUT - Update blog post
 app.put('/api/blog/posts/:id', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
-    const updateData = { ...req.body, updatedAt: Date.now() };
-    
-    if (updateData.status === 'published' && !updateData.publishedAt) {
-      updateData.publishedAt = new Date();
-    }
-    
-    const post = await BlogPost.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    );
-    
-    if (!post) {
+    const updates = req.body;
+    const posts = await readBlogPosts();
+    const index = posts.findIndex(p => p.id === req.params.id);
+
+    if (index === -1) {
       return res.status(404).json({
         success: false,
         message: 'Beitrag nicht gefunden'
       });
     }
-    
+
+    const existing = posts[index];
+    const updated = { ...existing };
+
+    const fields = ['title', 'excerpt', 'content', 'fullContent', 'image', 'category', 'metaTitle', 'metaDescription', 'aiGenerated'];
+    fields.forEach(field => {
+      if (updates[field] !== undefined) {
+        updated[field] = updates[field];
+      }
+    });
+
+    if (updates.keywords) {
+      updated.keywords = Array.isArray(updates.keywords) ? updates.keywords : [];
+    }
+
+    if (updates.slug) {
+      const slugCandidate = slugify(updates.slug);
+      updated.slug = ensureUniqueSlug(slugCandidate, posts, updated.id);
+    } else if (updates.title && !updates.slug) {
+      const slugCandidate = slugify(updates.title) || `post-${Date.now()}`;
+      updated.slug = ensureUniqueSlug(slugCandidate, posts, updated.id);
+    }
+
+    if (updates.status && BLOG_STATUSES.includes(updates.status)) {
+      updated.status = updates.status;
+      if (updates.status === 'published' && !updated.publishedAt) {
+        updated.publishedAt = new Date().toISOString();
+      }
+    }
+
+    updated.updatedAt = new Date().toISOString();
+
+    posts[index] = updated;
+    await writeBlogPosts(posts);
+
     res.json({
       success: true,
       message: 'Beitrag erfolgreich aktualisiert',
-      post
+      post: updated
     });
   } catch (error) {
     console.error('Fehler beim Aktualisieren:', error);
@@ -831,26 +753,26 @@ app.put('/api/blog/posts/:id', async (req, res) => {
 // DELETE - Delete blog post
 app.delete('/api/blog/posts/:id', async (req, res) => {
   try {
-    // Ensure MongoDB connection
-    await connectToDatabase();
-    
-    const post = await BlogPost.findByIdAndDelete(req.params.id);
-    
-    if (!post) {
+    const posts = await readBlogPosts();
+    const index = posts.findIndex(p => p.id === req.params.id);
+
+    if (index === -1) {
       return res.status(404).json({
         success: false,
         message: 'Beitrag nicht gefunden'
       });
     }
-    
-    // Delete associated image if exists
-    if (post.image && post.image.startsWith('/uploads/')) {
-      const imagePath = path.join(__dirname, post.image);
+
+    const [deleted] = posts.splice(index, 1);
+    await writeBlogPosts(posts);
+
+    if (deleted.image && deleted.image.startsWith('/uploads/')) {
+      const imagePath = path.join(__dirname, deleted.image);
       if (fs.existsSync(imagePath)) {
         fs.unlinkSync(imagePath);
       }
     }
-    
+
     res.json({
       success: true,
       message: 'Beitrag erfolgreich gelöscht'

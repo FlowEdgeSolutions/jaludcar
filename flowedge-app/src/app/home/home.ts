@@ -17,9 +17,6 @@ export class Home {
   @ViewChild('videoPlayer') videoPlayer!: ElementRef<HTMLIFrameElement>;
   videoPlaying = false;
   
-  // Mobile Menu
-  mobileMenuOpen = false;
-  
   contactForm = {
     firstName: '',
     lastName: '',
@@ -299,11 +296,4 @@ export class Home {
     }
   }
 
-  toggleMobileMenu() {
-    this.mobileMenuOpen = !this.mobileMenuOpen;
-  }
-
-  closeMobileMenu() {
-    this.mobileMenuOpen = false;
-  }
 }
