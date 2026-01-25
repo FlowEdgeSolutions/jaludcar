@@ -4,10 +4,14 @@
     <h1>Admin Login</h1>
     <p>Nur für Mitarbeiter</p>
     <input
+      type="email"
+      [(ngModel)]="authEmail"
+      placeholder="Email">
+    <input
       type="password"
-      [(ngModel)]="authToken"
-      placeholder="Admin-Code eingeben">
-    <button class="btn-login" (click)="login()" [disabled]="authLoading || !authToken">
+      [(ngModel)]="authPassword"
+      placeholder="Passwort">
+    <button class="btn-login" (click)="login()" [disabled]="authLoading || !authEmail || !authPassword">
       {{ authLoading ? 'Prüfe...' : 'Einloggen' }}
     </button>
     <div class="message error" *ngIf="authError">{{ authError }}</div>
@@ -494,4 +498,5 @@
   </div>
   <!-- END BLOG TAB -->
 </div>
+
 

@@ -6,7 +6,7 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const { GoogleGenAI } = require('@google/genai');
-const { Pool } = require('pg');
+const { Pool } = require('pg');\r\nconst bcrypt = require('bcryptjs');\r\nconst jwt = require('jsonwebtoken');
 
 require('dotenv').config();
 
@@ -89,36 +89,56 @@ if (geminiApiKey) {
   console.log('⚠️  Gemini API nicht konfiguriert (nur für Blog-Generierung benötigt).');
 }
 
-const adminToken = process.env.ADMIN_TOKEN || '';
+const jwtSecret = process.env.JWT_SECRET || '';
+const adminSeedEmail = process.env.ADMIN_EMAIL || '';
+const adminSeedPassword = process.env.ADMIN_PASSWORD || '';
 
-function getAdminTokenFromRequest(req) {
+function getTokenFromRequest(req) {
   const authHeader = req.headers.authorization || '';
   if (authHeader.startsWith('Bearer ')) {
     return authHeader.slice(7).trim();
   }
-  const headerToken = req.headers['x-admin-token'];
-  if (typeof headerToken === 'string') {
-    return headerToken;
-  }
   return '';
 }
 
+function signAdminToken(user) {
+  return jwt.sign(
+    { sub: user.id, email: user.email, role: user.role },
+    jwtSecret,
+    { expiresIn: '12h' }
+  );
+}
+
 function requireAdmin(req, res, next) {
-  if (!adminToken) {
+  if (!jwtSecret) {
     return res.status(503).json({
       success: false,
-      message: 'Admin-Zugriff ist nicht konfiguriert'
+      message: 'JWT_SECRET ist nicht konfiguriert'
     });
   }
-  const token = getAdminTokenFromRequest(req);
-  if (!token || token !== adminToken) {
+  const token = getTokenFromRequest(req);
+  if (!token) {
     return res.status(401).json({
       success: false,
       message: 'Nicht autorisiert'
     });
   }
-  next();
+  try {
+    const payload = jwt.verify(token, jwtSecret);
+    req.admin = {
+      id: payload.sub,
+      email: payload.email,
+      role: payload.role
+    };
+    return next();
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: 'Nicht autorisiert'
+    });
+  }
 }
+
 // Database (PostgreSQL)
 const databaseUrl = process.env.DATABASE_URL;
 const shouldUseSSL = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
@@ -172,6 +192,18 @@ async function initDb() {
           updated_at TIMESTAMPTZ NOT NULL
         );
       `);
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS admin_users (
+          id UUID PRIMARY KEY,
+          email TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          role TEXT NOT NULL DEFAULT 'staff',
+          created_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          last_login TIMESTAMPTZ
+        );
+      `);
+      await seedAdminUser();
     })();
   }
   return dbInitPromise;
@@ -182,6 +214,24 @@ async function dbQuery(text, params) {
   return pool.query(text, params);
 }
 
+async function seedAdminUser() {
+  if (!adminSeedEmail || !adminSeedPassword) {
+    return;
+  }
+  const email = adminSeedEmail.toLowerCase();
+  const existing = await pool.query('SELECT id FROM admin_users WHERE email = $1', [email]);
+  if (existing.rows.length > 0) {
+    return;
+  }
+  const now = new Date().toISOString();
+  const passwordHash = await bcrypt.hash(adminSeedPassword, 12);
+  await pool.query(
+    `INSERT INTO admin_users (id, email, password_hash, role, created_at, updated_at)
+     VALUES ($1, $2, $3, $4, $5, $6)`,
+    [randomUUID(), email, passwordHash, 'admin', now, now]
+  );
+  console.log('? Admin-User angelegt:', email);
+}
 function mapLeadRow(row) {
   return {
     _id: row.id,
@@ -287,19 +337,48 @@ const upload = multer({
   }
 });
 
-app.post('/api/admin/verify', (req, res) => {
-  const token = (req.body && req.body.token) || getAdminTokenFromRequest(req);
-  if (!adminToken) {
-    return res.status(503).json({
-      success: false,
-      message: 'Admin-Zugriff ist nicht konfiguriert'
+app.post('/api/admin/login', async (req, res) => {
+  try {
+    if (!jwtSecret) {
+      return res.status(503).json({
+        success: false,
+        message: 'JWT_SECRET ist nicht konfiguriert'
+      });
+    }
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email und Passwort sind erforderlich'
+      });
+    }
+    const result = await dbQuery('SELECT * FROM admin_users WHERE email = $1', [email.toLowerCase()]);
+    const user = result.rows[0];
+    if (!user) {
+      return res.status(401).json({ success: false, message: 'Ung�ltige Zugangsdaten' });
+    }
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ success: false, message: 'Ung�ltige Zugangsdaten' });
+    }
+    const now = new Date().toISOString();
+    await dbQuery('UPDATE admin_users SET last_login = $1 WHERE id = $2', [now, user.id]);
+    const token = signAdminToken({ id: user.id, email: user.email, role: user.role });
+    return res.json({
+      success: true,
+      token,
+      user: { email: user.email, role: user.role }
     });
+  } catch (error) {
+    console.error('Fehler beim Admin-Login:', error);
+    return res.status(500).json({ success: false, message: 'Serverfehler' });
   }
-  if (token && token === adminToken) {
-    return res.json({ success: true });
-  }
-  return res.status(401).json({ success: false, message: 'Nicht autorisiert' });
 });
+
+app.get('/api/admin/me', requireAdmin, (req, res) => {
+  res.json({ success: true, user: req.admin });
+});
+
 // Routes
 
 // POST - Create new lead
@@ -965,6 +1044,13 @@ if (!process.env.VERCEL) {
     console.log(`🚀 Server läuft auf Port ${PORT}`);
   });
 }
+
+
+
+
+
+
+
 
 
 

@@ -62,7 +62,8 @@ interface AIGeneratedContent {
 })
 export class Admin implements OnInit {
   private apiUrl = environment.apiUrl;
-  authToken = '';
+  authEmail = '';
+  authPassword = '';
   isAuthenticated = false;
   authLoading = false;
   authError = '';
@@ -128,31 +129,53 @@ export class Admin implements OnInit {
   }
 
   private initAuth() {
-    const saved = localStorage.getItem('jalud_admin_token');
+    const saved = this.getStoredToken();
     if (saved) {
-      this.authToken = saved;
       this.verifyToken();
     }
   }
 
+  private getStoredToken() {
+    return localStorage.getItem('jalud_admin_token') || '';
+  }
+
   private getAuthOptions() {
-    const token = this.authToken || localStorage.getItem('jalud_admin_token') || '';
+    const token = this.getStoredToken();
     return token ? { headers: new HttpHeaders({ Authorization: `Bearer ${token}` }) } : {};
   }
 
   login() {
-    if (!this.authToken) {
-      this.authError = 'Bitte Admin-Code eingeben';
+    if (!this.authEmail || !this.authPassword) {
+      this.authError = 'Bitte Email und Passwort eingeben';
       return;
     }
     this.authError = '';
-    this.verifyToken(true);
+    this.authLoading = true;
+    this.http.post<{ success: boolean; token: string }>(
+      `${this.apiUrl}/admin/login`,
+      { email: this.authEmail, password: this.authPassword }
+    ).subscribe({
+      next: (response) => {
+        localStorage.setItem('jalud_admin_token', response.token);
+        this.isAuthenticated = true;
+        this.authLoading = false;
+        this.authPassword = '';
+        this.loadLeads();
+        this.loadStats();
+        this.loadBlogPosts();
+      },
+      error: () => {
+        this.authLoading = false;
+        this.authError = 'Ungültige Zugangsdaten';
+      }
+    });
   }
 
   logout() {
     localStorage.removeItem('jalud_admin_token');
     this.isAuthenticated = false;
-    this.authToken = '';
+    this.authEmail = '';
+    this.authPassword = '';
     this.leads = [];
     this.filteredLeads = [];
     this.blogPosts = [];
@@ -160,17 +183,11 @@ export class Admin implements OnInit {
     this.stats = { total: 0, neu: 0, kontaktiert: 0, abgeschlossen: 0, packages: [] };
   }
 
-  private verifyToken(fromLogin = false) {
+  private verifyToken() {
     this.authLoading = true;
-    this.http.post<{ success: boolean }>(
-      `${this.apiUrl}/admin/verify`,
-      { token: this.authToken },
-      this.getAuthOptions()
-    ).subscribe({
+    this.http.get<{ success: boolean }>(`${this.apiUrl}/admin/me`, this.getAuthOptions())
+      .subscribe({
       next: () => {
-        if (fromLogin || this.authToken) {
-          localStorage.setItem('jalud_admin_token', this.authToken);
-        }
         this.isAuthenticated = true;
         this.authLoading = false;
         this.loadLeads();
@@ -180,7 +197,7 @@ export class Admin implements OnInit {
       error: () => {
         this.authLoading = false;
         this.isAuthenticated = false;
-        this.authError = 'Ungültiger Admin-Code';
+        this.authError = 'Bitte einloggen';
         localStorage.removeItem('jalud_admin_token');
       }
     });
