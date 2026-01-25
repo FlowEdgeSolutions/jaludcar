@@ -6,7 +6,9 @@ const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
 const { GoogleGenAI } = require('@google/genai');
-const { Pool } = require('pg');\r\nconst bcrypt = require('bcryptjs');\r\nconst jwt = require('jsonwebtoken');
+const { Pool } = require('pg');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 require('dotenv').config();
 
@@ -1044,6 +1046,7 @@ if (!process.env.VERCEL) {
     console.log(`🚀 Server läuft auf Port ${PORT}`);
   });
 }
+
 
 
 
