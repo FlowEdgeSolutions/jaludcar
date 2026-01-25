@@ -89,6 +89,36 @@ if (geminiApiKey) {
   console.log('⚠️  Gemini API nicht konfiguriert (nur für Blog-Generierung benötigt).');
 }
 
+const adminToken = process.env.ADMIN_TOKEN || '';
+
+function getAdminTokenFromRequest(req) {
+  const authHeader = req.headers.authorization || '';
+  if (authHeader.startsWith('Bearer ')) {
+    return authHeader.slice(7).trim();
+  }
+  const headerToken = req.headers['x-admin-token'];
+  if (typeof headerToken === 'string') {
+    return headerToken;
+  }
+  return '';
+}
+
+function requireAdmin(req, res, next) {
+  if (!adminToken) {
+    return res.status(503).json({
+      success: false,
+      message: 'Admin-Zugriff ist nicht konfiguriert'
+    });
+  }
+  const token = getAdminTokenFromRequest(req);
+  if (!token || token !== adminToken) {
+    return res.status(401).json({
+      success: false,
+      message: 'Nicht autorisiert'
+    });
+  }
+  next();
+}
 // Database (PostgreSQL)
 const databaseUrl = process.env.DATABASE_URL;
 const shouldUseSSL = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
@@ -257,6 +287,19 @@ const upload = multer({
   }
 });
 
+app.post('/api/admin/verify', (req, res) => {
+  const token = (req.body && req.body.token) || getAdminTokenFromRequest(req);
+  if (!adminToken) {
+    return res.status(503).json({
+      success: false,
+      message: 'Admin-Zugriff ist nicht konfiguriert'
+    });
+  }
+  if (token && token === adminToken) {
+    return res.json({ success: true });
+  }
+  return res.status(401).json({ success: false, message: 'Nicht autorisiert' });
+});
 // Routes
 
 // POST - Create new lead
@@ -310,7 +353,7 @@ app.post('/api/leads', async (req, res) => {
 });
 
 // GET - Get all leads (Admin)
-app.get('/api/leads', async (req, res) => {
+app.get('/api/leads', requireAdmin, async (req, res) => {
   try {
     const { status, sortBy = 'createdAt', order = 'desc' } = req.query;
     
@@ -349,7 +392,7 @@ app.get('/api/leads', async (req, res) => {
 });
 
 // GET - Get single lead
-app.get('/api/leads/:id', async (req, res) => {
+app.get('/api/leads/:id', requireAdmin, async (req, res) => {
   try {
     const result = await dbQuery(`SELECT * FROM leads WHERE id = $1`, [req.params.id]);
     const lead = result.rows[0];
@@ -375,7 +418,7 @@ app.get('/api/leads/:id', async (req, res) => {
 });
 
 // PUT - Update lead
-app.put('/api/leads/:id', async (req, res) => {
+app.put('/api/leads/:id', requireAdmin, async (req, res) => {
   try {
     const { status, notes } = req.body;
     const now = new Date().toISOString();
@@ -413,7 +456,7 @@ app.put('/api/leads/:id', async (req, res) => {
 });
 
 // DELETE - Delete lead
-app.delete('/api/leads/:id', async (req, res) => {
+app.delete('/api/leads/:id', requireAdmin, async (req, res) => {
   try {
     const result = await dbQuery(`DELETE FROM leads WHERE id = $1 RETURNING id`, [req.params.id]);
     if (!result.rows[0]) {
@@ -437,7 +480,7 @@ app.delete('/api/leads/:id', async (req, res) => {
 });
 
 // GET - Statistics
-app.get('/api/stats', async (req, res) => {
+app.get('/api/stats', requireAdmin, async (req, res) => {
   try {
     const totalsResult = await dbQuery(
       `SELECT
@@ -477,7 +520,7 @@ app.get('/api/stats', async (req, res) => {
 });
 
 // POST - Generate blog post with Gemini
-app.post('/api/blog/generate', async (req, res) => {
+app.post('/api/blog/generate', requireAdmin, async (req, res) => {
   try {
     const { topic, keywords, category, tone = 'professional' } = req.body;
     
@@ -554,7 +597,7 @@ Format als JSON:
   }
 });
 // POST - Upload blog image
-app.post('/api/blog/upload-image', upload.single('image'), (req, res) => {
+app.post('/api/blog/upload-image', requireAdmin, upload.single('image'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -580,7 +623,7 @@ app.post('/api/blog/upload-image', upload.single('image'), (req, res) => {
 });
 
 // POST - Create blog post
-app.post('/api/blog/posts', async (req, res) => {
+app.post('/api/blog/posts', requireAdmin, async (req, res) => {
   try {
     const postData = req.body;
 
@@ -648,7 +691,7 @@ app.post('/api/blog/posts', async (req, res) => {
 });
 
 // GET - Get all blog posts
-app.get('/api/blog/posts', async (req, res) => {
+app.get('/api/blog/posts', requireAdmin, async (req, res) => {
   try {
     const { status, category, sortBy = 'createdAt', order = 'desc' } = req.query;
 
@@ -752,7 +795,7 @@ app.get('/api/blog/posts/slug/:slug', async (req, res) => {
 });
 
 // GET - Get single blog post by ID
-app.get('/api/blog/posts/:id', async (req, res) => {
+app.get('/api/blog/posts/:id', requireAdmin, async (req, res) => {
   try {
     const result = await dbQuery(`SELECT * FROM blog_posts WHERE id = $1`, [req.params.id]);
     const post = result.rows[0];
@@ -778,7 +821,7 @@ app.get('/api/blog/posts/:id', async (req, res) => {
 });
 
 // PUT - Update blog post
-app.put('/api/blog/posts/:id', async (req, res) => {
+app.put('/api/blog/posts/:id', requireAdmin, async (req, res) => {
   try {
     const updates = req.body;
     const existingResult = await dbQuery(`SELECT * FROM blog_posts WHERE id = $1`, [req.params.id]);
@@ -875,7 +918,7 @@ app.put('/api/blog/posts/:id', async (req, res) => {
 });
 
 // DELETE - Delete blog post
-app.delete('/api/blog/posts/:id', async (req, res) => {
+app.delete('/api/blog/posts/:id', requireAdmin, async (req, res) => {
   try {
     const result = await dbQuery(`DELETE FROM blog_posts WHERE id = $1 RETURNING *`, [req.params.id]);
     const deleted = result.rows[0];
@@ -922,3 +965,6 @@ if (!process.env.VERCEL) {
     console.log(`🚀 Server läuft auf Port ${PORT}`);
   });
 }
+
+
+

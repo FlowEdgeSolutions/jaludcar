@@ -1,7 +1,7 @@
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { HttpClient, HttpClientModule } from '@angular/common/http';
+import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 
 interface Lead {
@@ -62,6 +62,10 @@ interface AIGeneratedContent {
 })
 export class Admin implements OnInit {
   private apiUrl = environment.apiUrl;
+  authToken = '';
+  isAuthenticated = false;
+  authLoading = false;
+  authError = '';
   
   // Tabs
   activeTab: 'leads' | 'blog' = 'leads';
@@ -120,9 +124,66 @@ export class Admin implements OnInit {
   constructor(private http: HttpClient) {}
 
   ngOnInit() {
-    this.loadLeads();
-    this.loadStats();
-    this.loadBlogPosts();
+    this.initAuth();
+  }
+
+  private initAuth() {
+    const saved = localStorage.getItem('jalud_admin_token');
+    if (saved) {
+      this.authToken = saved;
+      this.verifyToken();
+    }
+  }
+
+  private getAuthOptions() {
+    const token = this.authToken || localStorage.getItem('jalud_admin_token') || '';
+    return token ? { headers: new HttpHeaders({ Authorization: `Bearer ${token}` }) } : {};
+  }
+
+  login() {
+    if (!this.authToken) {
+      this.authError = 'Bitte Admin-Code eingeben';
+      return;
+    }
+    this.authError = '';
+    this.verifyToken(true);
+  }
+
+  logout() {
+    localStorage.removeItem('jalud_admin_token');
+    this.isAuthenticated = false;
+    this.authToken = '';
+    this.leads = [];
+    this.filteredLeads = [];
+    this.blogPosts = [];
+    this.filteredPosts = [];
+    this.stats = { total: 0, neu: 0, kontaktiert: 0, abgeschlossen: 0, packages: [] };
+  }
+
+  private verifyToken(fromLogin = false) {
+    this.authLoading = true;
+    this.http.post<{ success: boolean }>(
+      `${this.apiUrl}/admin/verify`,
+      { token: this.authToken },
+      this.getAuthOptions()
+    ).subscribe({
+      next: () => {
+        if (fromLogin || this.authToken) {
+          localStorage.setItem('jalud_admin_token', this.authToken);
+        }
+        this.isAuthenticated = true;
+        this.authLoading = false;
+        this.loadLeads();
+        this.loadStats();
+        this.loadBlogPosts();
+      },
+      error: () => {
+        this.authLoading = false;
+        this.isAuthenticated = false;
+        this.authError = 'Ungültiger Admin-Code';
+        localStorage.removeItem('jalud_admin_token');
+      }
+    });
   }
 
   // ============================================
@@ -136,10 +197,11 @@ export class Admin implements OnInit {
   }
 
   loadLeads() {
+    if (!this.isAuthenticated) return;
     this.loading = true;
     this.error = '';
     
-    this.http.get<{ success: boolean; leads: Lead[] }>(`${this.apiUrl}/leads`)
+    this.http.get<{ success: boolean; leads: Lead[] }>(`${this.apiUrl}/leads`, this.getAuthOptions())
       .subscribe({
         next: (response) => {
           this.leads = response.leads;
@@ -155,7 +217,8 @@ export class Admin implements OnInit {
   }
 
   loadStats() {
-    this.http.get<{ success: boolean; stats: Stats }>(`${this.apiUrl}/stats`)
+    if (!this.isAuthenticated) return;
+    this.http.get<{ success: boolean; stats: Stats }>(`${this.apiUrl}/stats`, this.getAuthOptions())
       .subscribe({
         next: (response) => {
           this.stats = response.stats;
@@ -214,7 +277,8 @@ export class Admin implements OnInit {
     
     this.http.put<{ success: boolean; message: string; lead: Lead }>(
       `${this.apiUrl}/leads/${this.selectedLead._id}`,
-      updateData
+      updateData,
+      this.getAuthOptions()
     ).subscribe({
       next: (response) => {
         this.successMessage = response.message;
@@ -241,7 +305,8 @@ export class Admin implements OnInit {
     this.error = '';
     
     this.http.delete<{ success: boolean; message: string }>(
-      `${this.apiUrl}/leads/${id}`
+      `${this.apiUrl}/leads/${id}`,
+      this.getAuthOptions()
     ).subscribe({
       next: (response) => {
         this.successMessage = response.message;
@@ -293,8 +358,9 @@ export class Admin implements OnInit {
   // ============================================
 
   loadBlogPosts() {
+    if (!this.isAuthenticated) return;
     this.loading = true;
-    this.http.get<{ success: boolean; posts: BlogPost[] }>(`${this.apiUrl}/blog/posts`)
+    this.http.get<{ success: boolean; posts: BlogPost[] }>(`${this.apiUrl}/blog/posts`, this.getAuthOptions())
       .subscribe({
         next: (response) => {
           this.blogPosts = response.posts;
@@ -389,7 +455,8 @@ export class Admin implements OnInit {
 
       this.http.post<{ success: boolean; imageUrl: string }>(
         `${this.apiUrl}/blog/upload-image`,
-        formData
+        formData,
+        this.getAuthOptions()
       ).subscribe({
         next: (response) => {
           this.blogForm.image = response.imageUrl;
@@ -412,10 +479,11 @@ export class Admin implements OnInit {
       ? `${this.apiUrl}/blog/posts/${this.blogForm._id}`
       : `${this.apiUrl}/blog/posts`;
 
+    const requestOptions = { body: this.blogForm, ...this.getAuthOptions() };
     this.http.request<{ success: boolean; message: string; post: BlogPost }>(
       method,
       url,
-      { body: this.blogForm }
+      requestOptions
     ).subscribe({
       next: (response) => {
         this.successMessage = response.message;
@@ -439,7 +507,8 @@ export class Admin implements OnInit {
 
     this.loading = true;
     this.http.delete<{ success: boolean; message: string }>(
-      `${this.apiUrl}/blog/posts/${id}`
+      `${this.apiUrl}/blog/posts/${id}`,
+      this.getAuthOptions()
     ).subscribe({
       next: (response) => {
         this.successMessage = response.message;
@@ -463,7 +532,8 @@ export class Admin implements OnInit {
 
     this.http.put<{ success: boolean; message: string }>(
       `${this.apiUrl}/blog/posts/${post._id}`,
-      updateData
+      updateData,
+      this.getAuthOptions()
     ).subscribe({
       next: (response) => {
         this.successMessage = 'Beitrag veröffentlicht!';
@@ -508,7 +578,8 @@ export class Admin implements OnInit {
         keywords: keywords,
         category: this.aiCategory,
         tone: this.aiTone
-      }
+      },
+      this.getAuthOptions()
     ).subscribe({
       next: (response) => {
         const content = response.content;

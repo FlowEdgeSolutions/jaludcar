@@ -1,9 +1,29 @@
+<!-- Admin Login -->
+<div class="admin-auth" *ngIf="!isAuthenticated">
+  <div class="auth-card">
+    <h1>Admin Login</h1>
+    <p>Nur für Mitarbeiter</p>
+    <input
+      type="password"
+      [(ngModel)]="authToken"
+      placeholder="Admin-Code eingeben">
+    <button class="btn-login" (click)="login()" [disabled]="authLoading || !authToken">
+      {{ authLoading ? 'Prüfe...' : 'Einloggen' }}
+    </button>
+    <div class="message error" *ngIf="authError">{{ authError }}</div>
+    <a href="/" class="back-home">Zur Website</a>
+  </div>
+</div>
+
 <!-- Admin Dashboard -->
-<div class="admin-container">
+<div class="admin-container" *ngIf="isAuthenticated">
   <header class="admin-header">
     <div class="header-content">
       <h1>JALUD Admin Dashboard</h1>
-      <a href="/" class="back-home">â† Zur Website</a>
+      <div class="header-actions">
+        <a href="/" class="back-home">Zur Website</a>
+        <button class="btn-logout" (click)="logout()">Logout</button>
+      </div>
     </div>
   </header>
 
@@ -474,3 +494,4 @@
   </div>
   <!-- END BLOG TAB -->
 </div>
+
