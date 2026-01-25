@@ -2,8 +2,9 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule } from '@angular/common/http';
-import { ViewChild, ElementRef } from '@angular/core';
+import { ViewChild, ElementRef, ChangeDetectorRef } from '@angular/core';
 import { environment } from '../../environments/environment';
+import { finalize } from 'rxjs';
 
 @Component({
   selector: 'app-home',
@@ -31,7 +32,7 @@ export class Home {
   submitSuccess = false;
   submitError = '';
 
-  constructor(private http: HttpClient) {}
+  constructor(private http: HttpClient, private cdr: ChangeDetectorRef) {}
 
   beforeAfterPosition = 50;
   private isDragging = false;
@@ -263,10 +264,14 @@ export class Home {
     this.http.post<{ success: boolean; message: string }>(
       `${this.apiUrl}/leads`,
       leadData
-    ).subscribe({
-      next: (response) => {
-        this.submitSuccess = true;
+    ).pipe(
+      finalize(() => {
         this.submitting = false;
+        this.cdr.markForCheck();
+      })
+    ).subscribe({
+      next: () => {
+        this.submitSuccess = true;
         // Reset form
         this.contactForm = {
           firstName: '',
@@ -276,12 +281,16 @@ export class Home {
           package: '',
           message: ''
         };
+        this.cdr.markForCheck();
         // Hide success message after 5 seconds
-        setTimeout(() => this.submitSuccess = false, 5000);
+        setTimeout(() => {
+          this.submitSuccess = false;
+          this.cdr.markForCheck();
+        }, 5000);
       },
       error: (err) => {
         this.submitError = 'Fehler beim Senden der Anfrage. Bitte versuchen Sie es später erneut.';
-        this.submitting = false;
+        this.cdr.markForCheck();
         console.error(err);
       }
     });
@@ -298,3 +307,4 @@ export class Home {
   }
 
 }
+
