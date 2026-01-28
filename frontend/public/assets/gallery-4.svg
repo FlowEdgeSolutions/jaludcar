@@ -1,0 +1,6 @@
+<svg width="800" height="600" xmlns="http://www.w3.org/2000/svg">
+  <rect width="800" height="600" fill="#ffffff"/>
+  <rect x="1" y="1" width="798" height="598" fill="none" stroke="#000000" stroke-width="2"/>
+  <polygon points="400,150 450,250 560,260 480,340 500,450 400,390 300,450 320,340 240,260 350,250" stroke="#000000" stroke-width="3" fill="none"/>
+  <text x="50%" y="15%" text-anchor="middle" font-family="Space Grotesk" font-size="36" font-weight="700" fill="#000000">Premium Service</text>
+</svg>

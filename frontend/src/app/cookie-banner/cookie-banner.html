@@ -1,0 +1,58 @@
+<div class="cookie-banner" *ngIf="showBanner">
+  <div class="cookie-content">
+    <div class="cookie-text">
+      <h3>Cookie-Einstellungen</h3>
+      <p>
+        Wir verwenden Cookies, um Ihnen ein optimales Webseitenerlebnis zu bieten. 
+        Dazu zählen Cookies, die für den Betrieb der Seite notwendig sind, sowie weitere, 
+        die zu Analysezwecken genutzt werden. Weitere Informationen finden Sie in unserer 
+        <a href="/datenschutz">Datenschutzerklärung</a>.
+      </p>
+    </div>
+    <div class="cookie-actions">
+      <button class="btn-accept-all" (click)="acceptAll()">Alle akzeptieren</button>
+      <button class="btn-essential" (click)="acceptEssential()">Nur notwendige</button>
+      <button class="btn-settings" (click)="openSettings()">Einstellungen</button>
+    </div>
+  </div>
+</div>
+
+<div class="cookie-settings-modal" *ngIf="showSettings">
+  <div class="modal-overlay" (click)="closeSettings()"></div>
+  <div class="modal-content">
+    <h2>Cookie-Einstellungen</h2>
+    <div class="cookie-options">
+      <div class="cookie-option">
+        <label>
+          <input type="checkbox" checked disabled>
+          <div class="option-info">
+            <strong>Notwendige Cookies</strong>
+            <p>Diese Cookies sind für die Grundfunktionen der Website erforderlich.</p>
+          </div>
+        </label>
+      </div>
+      <div class="cookie-option">
+        <label>
+          <input type="checkbox" [(ngModel)]="analyticsEnabled">
+          <div class="option-info">
+            <strong>Analyse-Cookies</strong>
+            <p>Diese Cookies helfen uns, die Nutzung der Website zu analysieren und zu verbessern.</p>
+          </div>
+        </label>
+      </div>
+      <div class="cookie-option">
+        <label>
+          <input type="checkbox" [(ngModel)]="marketingEnabled">
+          <div class="option-info">
+            <strong>Marketing-Cookies</strong>
+            <p>Diese Cookies werden verwendet, um Ihnen relevante Werbung anzuzeigen.</p>
+          </div>
+        </label>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-save" (click)="saveSettings()">Einstellungen speichern</button>
+      <button class="btn-cancel" (click)="closeSettings()">Abbrechen</button>
+    </div>
+  </div>
+</div>
