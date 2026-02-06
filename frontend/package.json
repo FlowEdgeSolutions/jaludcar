@@ -33,7 +33,7 @@
     "@angular/router": "^20.3.0",
     "@angular/ssr": "^20.3.7",
     "@ng-icons/core": "^32.2.0",
-    "@ng-icons/heroicons": "^32.2.0",
+    "@ng-icons/phosphor-icons": "^33.0.0",
     "express": "^5.1.0",
     "rxjs": "~7.8.0",
     "tslib": "^2.3.0"
