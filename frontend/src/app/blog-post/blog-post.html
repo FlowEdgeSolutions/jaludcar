@@ -2,7 +2,7 @@
 <article class="blog-post" *ngIf="post">
   <div class="post-container">
     <div class="post-header">
-      <a href="/blog" class="back-link">← Zurück zum Blog</a>
+      <a routerLink="/blog" class="back-link">← Zurück zum Blog</a>
       <span class="post-category">{{ post.category }}</span>
       <h1 class="post-title">{{ post.title }}</h1>
       <time class="post-date">{{ post.date }}</time>
@@ -25,17 +25,25 @@
     </div>
 
     <div class="post-navigation">
-      <a href="/blog" class="nav-btn">← Alle Beiträge</a>
+      <a routerLink="/blog" class="nav-btn">← Alle Beiträge</a>
     </div>
   </div>
 </article>
 
+<!-- Loading -->
+<div class="not-found" *ngIf="loading">
+  <div class="not-found-container">
+    <h1>Lade Beitrag...</h1>
+  </div>
+</div>
+
 <!-- Not Found Message -->
-<div class="not-found" *ngIf="!post">
+<div class="not-found" *ngIf="!post && !loading">
   <div class="not-found-container">
     <h1>Beitrag nicht gefunden</h1>
-    <p>Der gesuchte Blog-Beitrag existiert leider nicht.</p>
-    <a href="/blog" class="cta-btn">Zurück zum Blog</a>
+    <p *ngIf="error">{{ error }}</p>
+    <p *ngIf="!error">Der gesuchte Blog-Beitrag existiert leider nicht.</p>
+    <a routerLink="/blog" class="cta-btn">Zurück zum Blog</a>
   </div>
 </div>
 

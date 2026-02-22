@@ -19,9 +19,18 @@
           <time class="blog-date">{{ post.date }}</time>
           <h2 class="blog-title">{{ post.title }}</h2>
           <p class="blog-excerpt">{{ post.excerpt }}</p>
-          <a [href]="'/blog/' + post.id" class="read-more">Weiterlesen →</a>
+          <a [routerLink]="['/blog', post.slug || post.id]" class="read-more">Weiterlesen →</a>
         </div>
       </article>
+    </div>
+
+    <div class="no-results" *ngIf="loading && blogPosts.length === 0">
+      <p>Lade Beiträge...</p>
+    </div>
+
+    <div class="no-results" *ngIf="!loading && blogPosts.length === 0">
+      <p *ngIf="error">{{ error }}</p>
+      <p *ngIf="!error">Noch keine Blog-Beiträge veröffentlicht.</p>
     </div>
   </div>
 </section>

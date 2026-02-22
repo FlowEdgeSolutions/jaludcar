@@ -34,6 +34,7 @@ interface BlogPost {
   content: string;
   fullContent: string[];
   image: string;
+  imageUrl?: string;
   category: string;
   metaTitle: string;
   metaDescription: string;
@@ -62,6 +63,7 @@ interface AIGeneratedContent {
 })
 export class Admin implements OnInit {
   private apiUrl = environment.apiUrl;
+  private apiOrigin = this.apiUrl.replace(/\/api\/?$/, '');
   authEmail = '';
   authPassword = '';
   isAuthenticated = false;
@@ -126,6 +128,28 @@ export class Admin implements OnInit {
 
   ngOnInit() {
     this.initAuth();
+  }
+
+  private toPublicUrl(value: string): string {
+    if (!value) return '';
+    if (/^https?:\/\//i.test(value)) return value;
+
+    // Uploaded images are served by the backend under `/uploads/...`.
+    if (value.startsWith('/uploads/')) {
+      return `${this.apiOrigin}${value}`;
+    }
+
+    return value;
+  }
+
+  private syncBlogContentFromParagraphs() {
+    const paragraphs = Array.isArray(this.blogForm.fullContent) ? this.blogForm.fullContent : [];
+    const normalized = paragraphs
+      .map(p => (p ?? '').toString().trim())
+      .filter(p => p.length > 0);
+
+    this.blogForm.fullContent = normalized;
+    this.blogForm.content = normalized.join('\n\n');
   }
 
   private initAuth() {
@@ -380,7 +404,10 @@ export class Admin implements OnInit {
     this.http.get<{ success: boolean; posts: BlogPost[] }>(`${this.apiUrl}/blog/posts`, this.getAuthOptions())
       .subscribe({
         next: (response) => {
-          this.blogPosts = response.posts;
+          this.blogPosts = (response.posts || []).map(post => ({
+            ...post,
+            imageUrl: this.toPublicUrl(post.image)
+          }));
           this.applyBlogFilters();
           this.loading = false;
         },
@@ -420,7 +447,7 @@ export class Admin implements OnInit {
       title: '',
       excerpt: '',
       content: '',
-      fullContent: [],
+      fullContent: [''],
       image: '',
       category: '',
       metaTitle: '',
@@ -434,8 +461,13 @@ export class Admin implements OnInit {
   }
 
   editBlogPost(post: BlogPost) {
-    this.blogForm = { ...post };
-    this.imagePreview = post.image ? `${post.image}` : '';
+    const fullContent = Array.isArray(post.fullContent) && post.fullContent.length > 0
+      ? post.fullContent
+      : (post.content ? post.content.split(/\n\s*\n/).filter(p => p.trim()) : ['']);
+
+    this.blogForm = { ...post, fullContent };
+    this.blogForm.content = (this.blogForm.content || fullContent.join('\n\n')).trim();
+    this.imagePreview = post.image ? this.toPublicUrl(post.image) : '';
     this.showBlogEditor = true;
   }
 
@@ -457,8 +489,13 @@ export class Admin implements OnInit {
   }
 
   saveBlogPost() {
+    this.syncBlogContentFromParagraphs();
     if (!this.blogForm.title || !this.blogForm.category || !this.blogForm.excerpt) {
       this.error = 'Bitte füllen Sie alle Pflichtfelder aus';
+      return;
+    }
+    if (!this.blogForm.content) {
+      this.error = 'Bitte fügen Sie mindestens einen Absatz Inhalt hinzu';
       return;
     }
 

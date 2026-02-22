@@ -2,7 +2,7 @@
 <div class="admin-auth" *ngIf="!isAuthenticated">
   <div class="auth-card">
     <h1>Admin Login</h1>
-    <p>Nur für Mitarbeiter</p>
+    <p>Nur fÃ¼r Mitarbeiter</p>
     <input
       type="email"
       [(ngModel)]="authEmail"
@@ -12,7 +12,7 @@
       [(ngModel)]="authPassword"
       placeholder="Passwort">
     <button class="btn-login" (click)="login()" [disabled]="authLoading || !authEmail || !authPassword">
-      {{ authLoading ? 'Prüfe...' : 'Einloggen' }}
+      {{ authLoading ? 'PrÃ¼fe...' : 'Einloggen' }}
     </button>
     <div class="message error" *ngIf="authError">{{ authError }}</div>
     <a href="/" class="back-home">Zur Website</a>
@@ -280,7 +280,7 @@
     <section class="blog-posts-grid" *ngIf="!loading && !showBlogEditor">
       <div class="blog-post-card" *ngFor="let post of filteredPosts">
         <div class="post-image" *ngIf="post.image">
-          <img [src]="post.image" [alt]="post.title">
+          <img [src]="post.imageUrl || post.image" [alt]="post.title">
         </div>
         <div class="post-content">
           <span class="post-status-badge" [style.background-color]="getPostStatusColor(post.status)">
