@@ -6,5 +6,5 @@ import { Component } from '@angular/core';
   styleUrl: './impressum.scss',
 })
 export class Impressum {
-
+  readonly currentYear = new Date().getFullYear();
 }

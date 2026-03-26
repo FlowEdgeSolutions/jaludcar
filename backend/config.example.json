@@ -1,7 +1,7 @@
 {
-  "gemini": {
-    "apiKey": "YOUR_GEMINI_API_KEY",
-    "model": "gemini-3-flash-preview"
+  "openai": {
+    "apiKey": "YOUR_OPENAI_API_KEY",
+    "model": "gpt-4o-mini"
   },
   "blog": {
     "imagesPath": "uploads/blog"

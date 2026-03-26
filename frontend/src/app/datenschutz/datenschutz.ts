@@ -6,5 +6,5 @@ import { Component } from '@angular/core';
   styleUrl: './datenschutz.scss',
 })
 export class Datenschutz {
-
+  readonly currentYear = new Date().getFullYear();
 }

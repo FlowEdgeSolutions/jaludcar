@@ -6,5 +6,5 @@ import { Component } from '@angular/core';
   styleUrl: './agb.scss',
 })
 export class Agb {
-
+  readonly currentYear = new Date().getFullYear();
 }

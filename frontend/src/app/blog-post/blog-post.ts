@@ -23,6 +23,7 @@ interface BlogPostData {
   styleUrl: './blog-post.scss',
 })
 export class BlogPost implements OnInit {
+  readonly currentYear = new Date().getFullYear();
   private apiUrl = environment.apiUrl;
   private apiOrigin = this.apiUrl.replace(/\/api\/?$/, '');
 

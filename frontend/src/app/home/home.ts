@@ -14,6 +14,7 @@ import { finalize } from 'rxjs';
 })
 export class Home {
   title = 'JALUD';
+  readonly currentYear = new Date().getFullYear();
   private apiUrl = environment.apiUrl;
   
   @ViewChild('videoPlayer') videoPlayer!: ElementRef<HTMLIFrameElement>;

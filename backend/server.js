@@ -5,20 +5,19 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { randomUUID } = require('crypto');
-const { GoogleGenAI } = require('@google/genai');
 const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 const defaultConfig = {
-  gemini: {
+  openai: {
     apiKey: '',
-    model: 'gemini-3-flash-preview'
+    model: 'gpt-4o-mini'
   },
   blog: {
     imagesPath: 'public/images/blog',
@@ -44,9 +43,9 @@ try {
     config = {
       ...defaultConfig,
       ...localConfig,
-      gemini: {
-        ...defaultConfig.gemini,
-        ...(localConfig.gemini || {})
+      openai: {
+        ...defaultConfig.openai,
+        ...(localConfig.openai || {})
       },
       blog: {
         ...defaultConfig.blog,
@@ -63,8 +62,8 @@ try {
   config = { ...defaultConfig };
 }
 
-config.gemini.apiKey = process.env.GEMINI_API_KEY || config.gemini.apiKey;
-config.gemini.model = process.env.GEMINI_MODEL || config.gemini.model;
+config.openai.apiKey = process.env.OPENAI_API_KEY || config.openai.apiKey;
+config.openai.model = process.env.OPENAI_MODEL || config.openai.model;
 config.blog.imagesPath = config.blog.imagesPath || defaultConfig.blog.imagesPath;
 config.blog.postsPath = config.blog.postsPath || defaultConfig.blog.postsPath;
 config.email = {
@@ -77,18 +76,13 @@ config.email = {
   adminEmail: process.env.EMAIL_ADMIN || config.email.adminEmail
 };
 
-const geminiApiKey = config.gemini.apiKey;
-const geminiModel = config.gemini.model || defaultConfig.gemini.model;
-let geminiClient = null;
-if (geminiApiKey) {
-  try {
-    geminiClient = new GoogleGenAI({ apiKey: geminiApiKey });
-    console.log('✅ Gemini API konfiguriert');
-  } catch (e) {
-    console.log('⚠️  Gemini API konnte nicht initialisiert werden:', e.message);
-  }
+const openaiApiKey = config.openai.apiKey;
+const openaiModel = config.openai.model || defaultConfig.openai.model;
+const openaiBaseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
+if (openaiApiKey) {
+  console.log('✅ OpenAI API konfiguriert');
 } else {
-  console.log('⚠️  Gemini API nicht konfiguriert (nur für Blog-Generierung benötigt).');
+  console.log('⚠️  OpenAI API nicht konfiguriert (nur für Blog-Generierung benötigt).');
 }
 
 const jwtSecret = process.env.JWT_SECRET || '';
@@ -357,11 +351,11 @@ app.post('/api/admin/login', async (req, res) => {
     const result = await dbQuery('SELECT * FROM admin_users WHERE email = $1', [email.toLowerCase()]);
     const user = result.rows[0];
     if (!user) {
-      return res.status(401).json({ success: false, message: 'Ung�ltige Zugangsdaten' });
+      return res.status(401).json({ success: false, message: 'Ungültige Zugangsdaten' });
     }
     const valid = await bcrypt.compare(password, user.password_hash);
     if (!valid) {
-      return res.status(401).json({ success: false, message: 'Ung�ltige Zugangsdaten' });
+      return res.status(401).json({ success: false, message: 'Ungültige Zugangsdaten' });
     }
     const now = new Date().toISOString();
     await dbQuery('UPDATE admin_users SET last_login = $1 WHERE id = $2', [now, user.id]);
@@ -549,13 +543,13 @@ app.delete('/api/leads/:id', requireAdmin, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Lead erfolgreich gel�scht'
+      message: 'Lead erfolgreich gelöscht'
     });
   } catch (error) {
-    console.error('Fehler beim L�schen des Leads:', error);
+    console.error('Fehler beim Löschen des Leads:', error);
     res.status(500).json({
       success: false,
-      message: 'Fehler beim L�schen des Leads'
+      message: 'Fehler beim Löschen des Leads'
     });
   }
 });
@@ -600,7 +594,7 @@ app.get('/api/stats', requireAdmin, async (req, res) => {
   }
 });
 
-// POST - Generate blog post with Gemini
+// POST - Generate blog post with OpenAI
 app.post('/api/blog/generate', requireAdmin, async (req, res) => {
   try {
     const { topic, keywords, category, tone = 'professional' } = req.body;
@@ -612,10 +606,10 @@ app.post('/api/blog/generate', requireAdmin, async (req, res) => {
       });
     }
     
-    if (!geminiClient) {
+    if (!openaiApiKey) {
       return res.status(503).json({
         success: false,
-        message: 'Gemini API ist nicht konfiguriert. Bitte GEMINI_API_KEY setzen.'
+        message: 'OpenAI API ist nicht konfiguriert. Bitte OPENAI_API_KEY setzen.'
       });
     }
     
@@ -654,16 +648,72 @@ Format als JSON:
   "suggestedKeywords": ["keyword1", "keyword2", ...]
 }`;
     
-    const response = await geminiClient.models.generateContent({
-      model: geminiModel,
-      contents: [systemPrompt, userPrompt],
-      config: {
-        thinkingConfig: { thinkingLevel: 'MEDIUM' },
-        temperature: 0.7
-      }
+    const openaiPayload = {
+      model: openaiModel,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt }
+      ],
+      temperature: 0.7,
+      response_format: { type: 'json_object' }
+    };
+
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${openaiApiKey}`
+    };
+
+    let openaiResponse = await fetch(`${openaiBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(openaiPayload)
     });
-    
-    const generatedContent = JSON.parse(response.text);
+
+    let openaiData = await openaiResponse.json().catch(() => null);
+
+    // Some models/routers don't support response_format; retry without it.
+    if (
+      !openaiResponse.ok &&
+      openaiResponse.status === 400 &&
+      openaiData?.error?.message &&
+      /response_format/i.test(openaiData.error.message)
+    ) {
+      const retryPayload = { ...openaiPayload };
+      delete retryPayload.response_format;
+
+      openaiResponse = await fetch(`${openaiBaseUrl}/chat/completions`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(retryPayload)
+      });
+      openaiData = await openaiResponse.json().catch(() => null);
+    }
+
+    if (!openaiResponse.ok) {
+      const msg =
+        openaiData?.error?.message ||
+        `OpenAI API request failed (${openaiResponse.status})`;
+      throw new Error(msg);
+    }
+
+    const contentText = openaiData?.choices?.[0]?.message?.content;
+    if (!contentText) {
+      throw new Error('OpenAI API: Leere Antwort');
+    }
+
+    let generatedContent;
+    try {
+      generatedContent = JSON.parse(contentText);
+    } catch (parseError) {
+      // Fallback in case the model returns extra text around the JSON.
+      const start = contentText.indexOf('{');
+      const end = contentText.lastIndexOf('}');
+      if (start !== -1 && end !== -1 && end > start) {
+        generatedContent = JSON.parse(contentText.slice(start, end + 1));
+      } else {
+        throw parseError;
+      }
+    }
     
     res.json({
       success: true,
@@ -805,10 +855,10 @@ app.get('/api/blog/posts', requireAdmin, async (req, res) => {
       posts
     });
   } catch (error) {
-    console.error('Fehler beim Abrufen der Blog-Beitr�ge:', error);
+    console.error('Fehler beim Abrufen der Blog-Beiträge:', error);
     res.status(500).json({
       success: false,
-      message: 'Fehler beim Laden der Beitr�ge'
+      message: 'Fehler beim Laden der Beiträge'
     });
   }
 });
@@ -838,7 +888,7 @@ app.get('/api/blog/posts/published', async (req, res) => {
       posts
     });
   } catch (error) {
-    console.error('Fehler beim Abrufen ver�ffentlichter Beitr�ge:', error);
+    console.error('Fehler beim Abrufen veröffentlichter Beiträge:', error);
     res.status(500).json({
       success: false,
       message: 'Fehler beim Laden'
@@ -1021,13 +1071,13 @@ app.delete('/api/blog/posts/:id', requireAdmin, async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Beitrag erfolgreich gel�scht'
+      message: 'Beitrag erfolgreich gelöscht'
     });
   } catch (error) {
-    console.error('Fehler beim L�schen:', error);
+    console.error('Fehler beim Löschen:', error);
     res.status(500).json({
       success: false,
-      message: 'Fehler beim L�schen'
+      message: 'Fehler beim Löschen'
     });
   }
 });
