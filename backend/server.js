@@ -1104,9 +1104,47 @@ app.get('/health', (req, res) => {
 module.exports = app;
 
 // Start server when not running as Vercel serverless
+let server = null;
+
+async function shutdown(signal) {
+  console.log(`Shutdown signal empfangen: ${signal}`);
+
+  try {
+    if (server) {
+      await new Promise((resolve, reject) => {
+        server.close((error) => {
+          if (error) {
+            reject(error);
+            return;
+          }
+
+          resolve();
+        });
+      });
+    }
+
+    if (pool) {
+      await pool.end();
+    }
+
+    process.exit(0);
+  } catch (error) {
+    console.error('Fehler beim Herunterfahren:', error);
+    process.exit(1);
+  }
+}
+
 if (!process.env.VERCEL) {
-  app.listen(PORT, () => {
+  server = app.listen(PORT, () => {
     console.log(`🚀 Server läuft auf Port ${PORT}`);
+  });
+
+  process.on('SIGTERM', () => {
+    void shutdown('SIGTERM');
+  });
+
+  process.on('SIGINT', () => {
+    void shutdown('SIGINT');
   });
 }
 
