@@ -1083,6 +1083,19 @@ app.delete('/api/blog/posts/:id', requireAdmin, async (req, res) => {
 });
 
 // Health check
+app.get('/', (req, res) => {
+  res.json({
+    status: 'OK',
+    service: 'JALUD API',
+    message: 'Backend ist erreichbar',
+    endpoints: {
+      health: '/health',
+      leads: '/api/leads',
+      blog: '/api/blog/posts/published'
+    }
+  });
+});
+
 app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server läuft' });
 });
