@@ -1,5 +1,5 @@
-import { Component, OnInit } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, Inject, OnInit, PLATFORM_ID } from '@angular/core';
+import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../environments/environment';
@@ -124,7 +124,10 @@ export class Admin implements OnInit {
   error = '';
   successMessage = '';
 
-  constructor(private http: HttpClient) {}
+  constructor(
+    private http: HttpClient,
+    @Inject(PLATFORM_ID) private platformId: object,
+  ) {}
 
   ngOnInit() {
     this.initAuth();
@@ -160,6 +163,10 @@ export class Admin implements OnInit {
   }
 
   private getStoredToken() {
+    if (!isPlatformBrowser(this.platformId)) {
+      return '';
+    }
+
     return localStorage.getItem('jalud_admin_token') || '';
   }
 
@@ -180,7 +187,9 @@ export class Admin implements OnInit {
       { email: this.authEmail, password: this.authPassword }
     ).subscribe({
       next: (response) => {
-        localStorage.setItem('jalud_admin_token', response.token);
+        if (isPlatformBrowser(this.platformId)) {
+          localStorage.setItem('jalud_admin_token', response.token);
+        }
         this.isAuthenticated = true;
         this.authLoading = false;
         this.authPassword = '';
@@ -196,7 +205,9 @@ export class Admin implements OnInit {
   }
 
   logout() {
-    localStorage.removeItem('jalud_admin_token');
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.removeItem('jalud_admin_token');
+    }
     this.isAuthenticated = false;
     this.authEmail = '';
     this.authPassword = '';
@@ -222,7 +233,9 @@ export class Admin implements OnInit {
         this.authLoading = false;
         this.isAuthenticated = false;
         this.authError = 'Bitte einloggen';
-        localStorage.removeItem('jalud_admin_token');
+        if (isPlatformBrowser(this.platformId)) {
+          localStorage.removeItem('jalud_admin_token');
+        }
       }
     });
   }

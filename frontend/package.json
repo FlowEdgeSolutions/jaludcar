@@ -3,12 +3,16 @@
   "version": "0.0.0",
   "scripts": {
     "ng": "ng",
-    "start": "ng serve --proxy-config proxy.conf.json",
+    "dev": "ng serve --proxy-config proxy.conf.json",
+    "start": "node dist/flowedge-app/server/server.mjs",
     "build": "ng build",
     "build:vercel": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "serve:ssr:flowedge-app": "node dist/flowedge-app/server/server.mjs"
+  },
+  "engines": {
+    "node": ">=20.19.0"
   },
   "prettier": {
     "printWidth": 100,

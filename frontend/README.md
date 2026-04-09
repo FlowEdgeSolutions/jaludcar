@@ -7,7 +7,7 @@ This project was generated using [Angular CLI](https://github.com/angular/angula
 To start a local development server, run:
 
 ```bash
-ng serve
+npm run dev
 ```
 
 Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
@@ -35,6 +35,24 @@ ng build
 ```
 
 This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+
+## Railway deployment
+
+This frontend is configured for Angular SSR on Railway.
+
+1. Create a Railway service from this repository.
+2. Set the service Root Directory to `/frontend`.
+3. Railway can then use the default Node flow:
+   - install: `npm install`
+   - build: `npm run build`
+   - start: `npm start`
+
+`npm start` runs the production SSR server from `dist/flowedge-app/server/server.mjs` and binds to Railway's `PORT` environment variable via `src/server.ts`.
+
+Recommended:
+
+- Use Node 20 on Railway.
+- Keep the API on its own domain, because the production frontend already points to `https://api.jalud.de/api` in `src/environments/environment.prod.ts`.
 
 ## Running unit tests
 
