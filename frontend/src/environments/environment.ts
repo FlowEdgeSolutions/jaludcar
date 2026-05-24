@@ -4,7 +4,9 @@
 
 export const environment = {
   production: false,
-  apiUrl: '/api'
+  apiUrl: '/api',
+  siteUrl: 'http://localhost:4200',
+  googleAnalyticsId: ''
 };
 
 /*

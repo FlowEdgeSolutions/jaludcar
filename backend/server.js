@@ -149,7 +149,7 @@ let dbInitPromise = null;
 
 async function initDb() {
   if (!pool) {
-    throw new Error('DATABASE_URL ist nicht gesetzt. Bitte in Railway oder .env konfigurieren.');
+    throw new Error('DATABASE_URL ist nicht gesetzt. Bitte in backend/.env oder im Prozessmanager konfigurieren.');
   }
   if (!dbInitPromise) {
     dbInitPromise = (async () => {
@@ -1100,10 +1100,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Server läuft' });
 });
 
-// Export for Vercel Serverless
+// Export the app for tests and alternative process managers.
 module.exports = app;
 
-// Start server when not running as Vercel serverless
+// Start the HTTP server when this file is executed directly.
 let server = null;
 
 async function shutdown(signal) {
@@ -1134,7 +1134,7 @@ async function shutdown(signal) {
   }
 }
 
-if (!process.env.VERCEL) {
+if (require.main === module) {
   server = app.listen(PORT, () => {
     console.log(`🚀 Server läuft auf Port ${PORT}`);
   });

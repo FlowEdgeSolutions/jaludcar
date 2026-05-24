@@ -50,10 +50,9 @@ Thumbs.db
 .env.*.local
 backend/.env
 backend/config.json
+deploy/hetzner/*.env
+!deploy/hetzner/*.env.example
 import.env
 
 # Uploads
 backend/uploads/
-
-# Vercel
-.vercel

@@ -6,7 +6,7 @@
     "dev": "ng serve --proxy-config proxy.conf.json",
     "start": "node dist/flowedge-app/server/server.mjs",
     "build": "ng build",
-    "build:vercel": "ng build --configuration production",
+    "build:prod": "ng build --configuration production",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "serve:ssr:flowedge-app": "node dist/flowedge-app/server/server.mjs"

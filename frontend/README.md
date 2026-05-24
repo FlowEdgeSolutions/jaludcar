@@ -36,23 +36,18 @@ ng build
 
 This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
 
-## Railway deployment
+## Hetzner deployment
 
-This frontend is configured for Angular SSR on Railway.
+The production app is configured for Hetzner VPS hosting with Nginx, PM2 and PostgreSQL.
 
-1. Create a Railway service from this repository.
-2. Set the service Root Directory to `/frontend`.
-3. Railway can then use the default Node flow:
-   - install: `npm install`
-   - build: `npm run build`
-   - start: `npm start`
+See `../deploy/hetzner/README.md` for the full deployment steps.
 
-`npm start` runs the production SSR server from `dist/flowedge-app/server/server.mjs` and binds to Railway's `PORT` environment variable via `src/server.ts`.
+Production runtime:
 
-Recommended:
-
-- Use Node 20 on Railway.
-- Keep the API on its own domain, because the production frontend already points to `https://api.jalud.de/api` in `src/environments/environment.prod.ts`.
+- Angular SSR listens on local port `4000`.
+- Express API listens on local port `3000`.
+- Nginx exposes the public domain and proxies `/api` plus `/uploads` to the API.
+- The production frontend points to `https://jalud.de/api` in `src/environments/environment.prod.ts`.
 
 ## Running unit tests
 

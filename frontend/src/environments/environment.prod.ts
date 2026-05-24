@@ -4,5 +4,7 @@
 
 export const environment = {
   production: true,
-  apiUrl: 'https://api.jalud.de/api'
+  apiUrl: 'https://jalud.de/api',
+  siteUrl: 'https://jalud.de',
+  googleAnalyticsId: 'G-YERKT4RFHW'
 };
