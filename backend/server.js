@@ -89,6 +89,26 @@ if (resendEnabled) {
   console.log('⚠️  Resend E-Mail Versand nicht konfiguriert (Lead-Speicherung funktioniert trotzdem).');
 }
 
+const googlePlacesApiKey = process.env.GOOGLE_PLACES_API_KEY || '';
+const hunterApiKey = process.env.HUNTER_API_KEY || '';
+const jaludLeadCenter = {
+  lat: Number(process.env.JALUD_LEAD_CENTER_LAT || 51.41109),
+  lng: Number(process.env.JALUD_LEAD_CENTER_LNG || 7.19951)
+};
+const jaludLeadRadiusMeters = Number(process.env.JALUD_LEAD_RADIUS_METERS || 15000);
+
+if (googlePlacesApiKey) {
+  console.log('Google Places API konfiguriert');
+} else {
+  console.log('Google Places API nicht konfiguriert (nur fuer Akquise-Import benoetigt).');
+}
+
+if (hunterApiKey) {
+  console.log('Hunter API konfiguriert');
+} else {
+  console.log('Hunter API nicht konfiguriert (nur fuer Hunter-Akquise benoetigt).');
+}
+
 const jwtSecret = process.env.JWT_SECRET || '';
 const adminSeedEmail = process.env.ADMIN_EMAIL || '';
 const adminSeedPassword = process.env.ADMIN_PASSWORD || '';
@@ -193,6 +213,44 @@ async function initDb() {
         );
       `);
       await pool.query(`
+        CREATE TABLE IF NOT EXISTS prospect_leads (
+          id UUID PRIMARY KEY,
+          source TEXT NOT NULL,
+          external_id TEXT,
+          company_name TEXT NOT NULL,
+          category TEXT,
+          query TEXT,
+          city TEXT,
+          address TEXT,
+          phone TEXT,
+          website TEXT,
+          domain TEXT,
+          email TEXT,
+          emails JSONB NOT NULL DEFAULT '[]'::jsonb,
+          status TEXT NOT NULL DEFAULT 'neu',
+          notes TEXT NOT NULL DEFAULT '',
+          distance_meters INTEGER,
+          lat DOUBLE PRECISION,
+          lng DOUBLE PRECISION,
+          metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+          raw_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL,
+          last_imported_at TIMESTAMPTZ
+        );
+      `);
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS prospect_leads_source_external_id_unique
+        ON prospect_leads (source, external_id)
+        WHERE external_id IS NOT NULL;
+      `);
+      await pool.query(`DROP INDEX IF EXISTS prospect_leads_source_domain_unique;`);
+      await pool.query(`
+        CREATE UNIQUE INDEX IF NOT EXISTS prospect_leads_source_domain_unique
+        ON prospect_leads (source, domain)
+        WHERE source = 'hunter' AND domain IS NOT NULL;
+      `);
+      await pool.query(`
         CREATE TABLE IF NOT EXISTS admin_users (
           id UUID PRIMARY KEY,
           email TEXT NOT NULL UNIQUE,
@@ -269,6 +327,34 @@ function mapBlogRow(row) {
   };
 }
 
+function mapProspectLeadRow(row) {
+  return {
+    _id: row.id,
+    source: row.source,
+    externalId: row.external_id || '',
+    companyName: row.company_name,
+    category: row.category || '',
+    query: row.query || '',
+    city: row.city || '',
+    address: row.address || '',
+    phone: row.phone || '',
+    website: row.website || '',
+    domain: row.domain || '',
+    email: row.email || '',
+    emails: row.emails || [],
+    status: row.status,
+    notes: row.notes || '',
+    distanceMeters: row.distance_meters,
+    lat: row.lat,
+    lng: row.lng,
+    metadata: row.metadata || {},
+    rawData: row.raw_data || {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastImportedAt: row.last_imported_at
+  };
+}
+
 function slugify(text = '') {
   return text
     .toLowerCase()
@@ -297,6 +383,111 @@ async function ensureUniqueSlug(baseSlug, excludeId) {
 }
 
 const BLOG_STATUSES = ['draft', 'published', 'archived'];
+const PROSPECT_STATUSES = ['neu', 'geprueft', 'kontaktiert', 'angebot', 'gewonnen', 'abgelehnt'];
+const PROSPECT_SOURCES = ['google_places', 'hunter'];
+const GOOGLE_PLACE_CATEGORIES = [
+  'Heizung Sanitär',
+  'Malerbetriebe',
+  'Garten und Landschaftsbau',
+  'Bauunternehmer/Bauleiter',
+  'Autovermietung',
+  'Fahrschulen',
+  'Taxiunternehmen',
+  'Behinderten Transport',
+  'Schülertransport',
+  'Bestattungsunternehmen',
+  'Sicherheitsdienste',
+  'KFZ Sachverständiger',
+  'KFZ Gutachter',
+  'Speditionen',
+  'Pflegedienste',
+  'Reiterhöfe/Pferdeanhänger'
+];
+
+const GOOGLE_PLACE_QUERY_MAP = {
+  'Heizung Sanitär': 'Heizung Sanitär Betrieb',
+  'Malerbetriebe': 'Malerbetrieb',
+  'Garten und Landschaftsbau': 'Garten Landschaftsbau',
+  'Bauunternehmer/Bauleiter': 'Bauunternehmen Bauleiter',
+  'Autovermietung': 'Autovermietung',
+  'Fahrschulen': 'Fahrschule',
+  'Taxiunternehmen': 'Taxiunternehmen',
+  'Behinderten Transport': 'Behindertentransport Fahrdienst',
+  'Schülertransport': 'Schülertransport Fahrdienst',
+  'Bestattungsunternehmen': 'Bestattungsunternehmen',
+  'Sicherheitsdienste': 'Sicherheitsdienst',
+  'KFZ Sachverständiger': 'KFZ Sachverständiger',
+  'KFZ Gutachter': 'KFZ Gutachter',
+  'Speditionen': 'Spedition',
+  'Pflegedienste': 'Pflegedienst',
+  'Reiterhöfe/Pferdeanhänger': 'Reiterhof Pferdeanhänger'
+};
+
+function normalizeDomain(value = '') {
+  const input = String(value || '').trim();
+  if (!input) {
+    return '';
+  }
+
+  try {
+    const url = input.startsWith('http://') || input.startsWith('https://')
+      ? new URL(input)
+      : new URL(`https://${input}`);
+    return url.hostname.replace(/^www\./i, '').toLowerCase();
+  } catch (error) {
+    return input
+      .replace(/^https?:\/\//i, '')
+      .replace(/^www\./i, '')
+      .split('/')[0]
+      .trim()
+      .toLowerCase();
+  }
+}
+
+function haversineDistanceMeters(a, b) {
+  if (!Number.isFinite(a.lat) || !Number.isFinite(a.lng) || !Number.isFinite(b.lat) || !Number.isFinite(b.lng)) {
+    return null;
+  }
+
+  const earthRadiusMeters = 6371000;
+  const toRadians = (degrees) => degrees * Math.PI / 180;
+  const deltaLat = toRadians(b.lat - a.lat);
+  const deltaLng = toRadians(b.lng - a.lng);
+  const lat1 = toRadians(a.lat);
+  const lat2 = toRadians(b.lat);
+  const value = Math.sin(deltaLat / 2) ** 2
+    + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+  return Math.round(earthRadiusMeters * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value)));
+}
+
+function buildSearchBounds(center, radiusMeters) {
+  const latDelta = radiusMeters / 111320;
+  const lngDelta = radiusMeters / (111320 * Math.cos(center.lat * Math.PI / 180));
+  return {
+    low: {
+      latitude: center.lat - latDelta,
+      longitude: center.lng - lngDelta
+    },
+    high: {
+      latitude: center.lat + latDelta,
+      longitude: center.lng + lngDelta
+    }
+  };
+}
+
+function getHunterErrorMessage(status, data) {
+  const firstError = Array.isArray(data?.errors) ? data.errors[0] : null;
+  if (firstError?.id === 'no_discover_access' || firstError?.details?.includes('Discover')) {
+    return 'Hunter Discover ist fuer diesen API-Key oder Tarif nicht freigeschaltet.';
+  }
+  if (status === 401) {
+    return 'Hunter API-Key ist ungueltig oder fehlt.';
+  }
+  if (status === 403 || status === 429) {
+    return 'Hunter Limit erreicht oder Zugriff verweigert. Bitte Tarif und Limits pruefen.';
+  }
+  return firstError?.details || data?.message || `Hunter API Fehler (${status})`;
+}
 
 
 // Middleware
@@ -709,6 +900,586 @@ app.get('/api/stats', requireAdmin, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Fehler beim Laden der Statistiken'
+    });
+  }
+});
+
+async function upsertGoogleProspectLead({ place, category, query, distanceMeters }) {
+  const now = new Date().toISOString();
+  const location = place.location || {};
+  const website = place.websiteUri || '';
+  const domain = normalizeDomain(website);
+  const phone = place.nationalPhoneNumber || place.internationalPhoneNumber || '';
+  const companyName = place.displayName?.text || place.name || 'Unbekannter Google-Places-Treffer';
+  const metadata = {
+    googleMapsUri: place.googleMapsUri || '',
+    businessStatus: place.businessStatus || '',
+    placeResourceName: place.name || '',
+    sourceQuery: query
+  };
+
+  const result = await dbQuery(
+    `INSERT INTO prospect_leads (
+      id, source, external_id, company_name, category, query, city, address,
+      phone, website, domain, email, emails, status, notes, distance_meters,
+      lat, lng, metadata, raw_data, created_at, updated_at, last_imported_at
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23
+    )
+    ON CONFLICT (source, external_id) WHERE external_id IS NOT NULL
+    DO UPDATE SET
+      company_name = EXCLUDED.company_name,
+      category = EXCLUDED.category,
+      query = EXCLUDED.query,
+      city = EXCLUDED.city,
+      address = EXCLUDED.address,
+      phone = EXCLUDED.phone,
+      website = EXCLUDED.website,
+      domain = EXCLUDED.domain,
+      distance_meters = EXCLUDED.distance_meters,
+      lat = EXCLUDED.lat,
+      lng = EXCLUDED.lng,
+      metadata = EXCLUDED.metadata,
+      raw_data = EXCLUDED.raw_data,
+      updated_at = EXCLUDED.updated_at,
+      last_imported_at = EXCLUDED.last_imported_at
+    RETURNING (xmax = 0) AS inserted, *`,
+    [
+      randomUUID(),
+      'google_places',
+      place.id,
+      companyName,
+      category,
+      query,
+      'Hattingen',
+      place.formattedAddress || '',
+      phone,
+      website,
+      domain,
+      '',
+      JSON.stringify([]),
+      'neu',
+      '',
+      distanceMeters,
+      location.latitude ?? null,
+      location.longitude ?? null,
+      JSON.stringify(metadata),
+      JSON.stringify(place),
+      now,
+      now,
+      now
+    ]
+  );
+
+  return {
+    inserted: Boolean(result.rows[0]?.inserted),
+    lead: mapProspectLeadRow(result.rows[0])
+  };
+}
+
+async function importGooglePlacesCategory(category) {
+  const queryTerm = GOOGLE_PLACE_QUERY_MAP[category] || category;
+  const textQuery = `${queryTerm} in Hattingen und Umgebung`;
+  const baseBody = {
+    textQuery,
+    pageSize: 20,
+    languageCode: 'de',
+    regionCode: 'DE',
+    rankPreference: 'DISTANCE',
+    locationRestriction: {
+      rectangle: buildSearchBounds(jaludLeadCenter, jaludLeadRadiusMeters)
+    }
+  };
+  const fieldMask = [
+    'places.id',
+    'places.name',
+    'places.displayName',
+    'places.formattedAddress',
+    'places.location',
+    'places.nationalPhoneNumber',
+    'places.internationalPhoneNumber',
+    'places.websiteUri',
+    'places.googleMapsUri',
+    'places.businessStatus',
+    'nextPageToken'
+  ].join(',');
+
+  const allPlaces = [];
+  let nextPageToken = '';
+
+  do {
+    const body = nextPageToken ? { ...baseBody, pageToken: nextPageToken } : baseBody;
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': googlePlacesApiKey,
+        'X-Goog-FieldMask': fieldMask
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      const message = data?.error?.message || `Google Places API Fehler (${response.status})`;
+      throw new Error(message);
+    }
+
+    allPlaces.push(...(data?.places || []));
+    nextPageToken = allPlaces.length < 60 ? (data?.nextPageToken || '') : '';
+  } while (nextPageToken);
+
+  const seenPlaceIds = new Set();
+  const imported = [];
+  let skippedOutsideRadius = 0;
+  let skippedWithoutLocation = 0;
+
+  for (const place of allPlaces.slice(0, 60)) {
+    if (!place?.id || seenPlaceIds.has(place.id)) {
+      continue;
+    }
+    seenPlaceIds.add(place.id);
+
+    const location = place.location || {};
+    const placePoint = {
+      lat: Number(location.latitude),
+      lng: Number(location.longitude)
+    };
+    const distanceMeters = haversineDistanceMeters(jaludLeadCenter, placePoint);
+
+    if (distanceMeters === null) {
+      skippedWithoutLocation += 1;
+      continue;
+    }
+    if (distanceMeters > jaludLeadRadiusMeters) {
+      skippedOutsideRadius += 1;
+      continue;
+    }
+
+    imported.push(await upsertGoogleProspectLead({ place, category, query: textQuery, distanceMeters }));
+  }
+
+  return {
+    category,
+    query: textQuery,
+    fetched: allPlaces.length,
+    imported: imported.length,
+    created: imported.filter(item => item.inserted).length,
+    updated: imported.filter(item => !item.inserted).length,
+    skippedOutsideRadius,
+    skippedWithoutLocation,
+    leads: imported.map(item => item.lead)
+  };
+}
+
+async function upsertHunterProspectLead({ company, industry, city, countryCode, query }) {
+  const now = new Date().toISOString();
+  const domain = normalizeDomain(company.domain || '');
+  const companyName = company.organization || company.name || domain || 'Unbekannte Hunter-Firma';
+  const metadata = {
+    emailsCount: company.emails_count || null,
+    countryCode,
+    sourceQuery: query
+  };
+
+  const result = await dbQuery(
+    `INSERT INTO prospect_leads (
+      id, source, external_id, company_name, category, query, city, address,
+      phone, website, domain, email, emails, status, notes, distance_meters,
+      lat, lng, metadata, raw_data, created_at, updated_at, last_imported_at
+    ) VALUES (
+      $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23
+    )
+    ON CONFLICT (source, domain) WHERE source = 'hunter' AND domain IS NOT NULL
+    DO UPDATE SET
+      company_name = EXCLUDED.company_name,
+      category = EXCLUDED.category,
+      query = EXCLUDED.query,
+      city = EXCLUDED.city,
+      website = EXCLUDED.website,
+      metadata = EXCLUDED.metadata,
+      raw_data = EXCLUDED.raw_data,
+      updated_at = EXCLUDED.updated_at,
+      last_imported_at = EXCLUDED.last_imported_at
+    RETURNING (xmax = 0) AS inserted, *`,
+    [
+      randomUUID(),
+      'hunter',
+      null,
+      companyName,
+      industry,
+      query,
+      city,
+      '',
+      '',
+      domain ? `https://${domain}` : '',
+      domain,
+      '',
+      JSON.stringify([]),
+      'neu',
+      '',
+      null,
+      null,
+      null,
+      JSON.stringify(metadata),
+      JSON.stringify(company),
+      now,
+      now,
+      now
+    ]
+  );
+
+  return {
+    inserted: Boolean(result.rows[0]?.inserted),
+    lead: mapProspectLeadRow(result.rows[0])
+  };
+}
+
+function countryNameFromCode(countryCode = 'DE') {
+  const normalized = String(countryCode || 'DE').trim().toUpperCase();
+  const names = {
+    DE: 'Germany',
+    AT: 'Austria',
+    CH: 'Switzerland',
+    NL: 'Netherlands',
+    BE: 'Belgium',
+    FR: 'France'
+  };
+  return names[normalized] || normalized;
+}
+
+async function importHunterCompanies({ industry, city, countryCode = 'DE' }) {
+  const normalizedCountryCode = String(countryCode || 'DE').trim().toUpperCase();
+  const query = `${industry} companies in ${city}, ${countryNameFromCode(normalizedCountryCode)}`;
+  const response = await fetch(`https://api.hunter.io/v2/discover?api_key=${encodeURIComponent(hunterApiKey)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ query })
+  });
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const error = new Error(getHunterErrorMessage(response.status, data));
+    error.statusCode = response.status === 403 ? 403 : 502;
+    throw error;
+  }
+
+  const companies = Array.isArray(data?.data) ? data.data : [];
+  const imported = [];
+  let skippedWithoutDomain = 0;
+
+  for (const company of companies) {
+    if (!normalizeDomain(company?.domain || '')) {
+      skippedWithoutDomain += 1;
+      continue;
+    }
+    imported.push(await upsertHunterProspectLead({
+      company,
+      industry,
+      city,
+      countryCode: normalizedCountryCode,
+      query
+    }));
+  }
+
+  return {
+    query,
+    fetched: companies.length,
+    imported: imported.length,
+    created: imported.filter(item => item.inserted).length,
+    updated: imported.filter(item => !item.inserted).length,
+    skippedWithoutDomain,
+    leads: imported.map(item => item.lead),
+    meta: data?.meta || {}
+  };
+}
+
+function mapHunterEmail(email) {
+  return {
+    value: email.value || '',
+    type: email.type || '',
+    confidence: email.confidence ?? null,
+    firstName: email.first_name || '',
+    lastName: email.last_name || '',
+    position: email.position || '',
+    phoneNumber: email.phone_number || '',
+    verificationStatus: email.verification?.status || email.verification_status || ''
+  };
+}
+
+function pickPrimaryEmail(emails) {
+  const candidates = [...emails].filter(email => email.value);
+  candidates.sort((a, b) => {
+    if (a.type === 'generic' && b.type !== 'generic') return -1;
+    if (a.type !== 'generic' && b.type === 'generic') return 1;
+    return (b.confidence || 0) - (a.confidence || 0);
+  });
+  return candidates[0]?.value || '';
+}
+
+// GET - Prospect leads for Google Places / Hunter Kanban
+app.get('/api/prospect-leads', requireAdmin, async (req, res) => {
+  try {
+    const source = req.query.source ? String(req.query.source) : null;
+    if (source && !PROSPECT_SOURCES.includes(source)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ungueltige Lead-Quelle'
+      });
+    }
+
+    const result = await dbQuery(
+      `SELECT * FROM prospect_leads
+       WHERE ($1::text IS NULL OR source = $1)
+       ORDER BY updated_at DESC, created_at DESC`,
+      [source]
+    );
+
+    return res.json({
+      success: true,
+      count: result.rows.length,
+      leads: result.rows.map(mapProspectLeadRow)
+    });
+  } catch (error) {
+    console.error('Fehler beim Laden der Akquise-Leads:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden der Akquise-Leads'
+    });
+  }
+});
+
+// PATCH - Update prospect lead status/notes
+app.patch('/api/prospect-leads/:id', requireAdmin, async (req, res) => {
+  try {
+    const { status, notes } = req.body || {};
+    if (status && !PROSPECT_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Ungueltiger Status'
+      });
+    }
+
+    const now = new Date().toISOString();
+    const result = await dbQuery(
+      `UPDATE prospect_leads
+       SET status = COALESCE($1, status),
+           notes = COALESCE($2, notes),
+           updated_at = $3
+       WHERE id = $4
+       RETURNING *`,
+      [status || null, notes ?? null, now, req.params.id]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({
+        success: false,
+        message: 'Akquise-Lead nicht gefunden'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Akquise-Lead aktualisiert',
+      lead: mapProspectLeadRow(result.rows[0])
+    });
+  } catch (error) {
+    console.error('Fehler beim Aktualisieren des Akquise-Leads:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Fehler beim Aktualisieren'
+    });
+  }
+});
+
+// DELETE - Delete prospect lead
+app.delete('/api/prospect-leads/:id', requireAdmin, async (req, res) => {
+  try {
+    const result = await dbQuery(`DELETE FROM prospect_leads WHERE id = $1 RETURNING id`, [req.params.id]);
+    if (!result.rows[0]) {
+      return res.status(404).json({
+        success: false,
+        message: 'Akquise-Lead nicht gefunden'
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: 'Akquise-Lead geloescht'
+    });
+  } catch (error) {
+    console.error('Fehler beim Loeschen des Akquise-Leads:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Fehler beim Loeschen'
+    });
+  }
+});
+
+app.get('/api/google-places/categories', requireAdmin, (req, res) => {
+  res.json({
+    success: true,
+    radiusMeters: jaludLeadRadiusMeters,
+    center: {
+      ...jaludLeadCenter,
+      address: 'Auf dem Haidchen 45, 45527 Hattingen'
+    },
+    categories: GOOGLE_PLACE_CATEGORIES
+  });
+});
+
+app.post('/api/google-places/import', requireAdmin, async (req, res) => {
+  try {
+    const { category } = req.body || {};
+    if (!category || !GOOGLE_PLACE_CATEGORIES.includes(category)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bitte eine gueltige Google-Places-Kategorie waehlen'
+      });
+    }
+
+    if (!googlePlacesApiKey) {
+      return res.status(503).json({
+        success: false,
+        message: 'Google Places API ist nicht konfiguriert. Bitte GOOGLE_PLACES_API_KEY setzen.'
+      });
+    }
+
+    const summary = await importGooglePlacesCategory(category);
+    return res.json({
+      success: true,
+      message: `${summary.imported} Google-Places-Leads importiert`,
+      summary
+    });
+  } catch (error) {
+    console.error('Fehler beim Google-Places-Import:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Fehler beim Google-Places-Import: ' + error.message
+    });
+  }
+});
+
+app.post('/api/hunter/import', requireAdmin, async (req, res) => {
+  try {
+    const { industry, city, countryCode = 'DE' } = req.body || {};
+    if (!industry || !city) {
+      return res.status(400).json({
+        success: false,
+        message: 'Branche und Stadt sind erforderlich'
+      });
+    }
+
+    if (!hunterApiKey) {
+      return res.status(503).json({
+        success: false,
+        message: 'Hunter API ist nicht konfiguriert. Bitte HUNTER_API_KEY setzen.'
+      });
+    }
+
+    const summary = await importHunterCompanies({ industry, city, countryCode });
+    return res.json({
+      success: true,
+      message: `${summary.imported} Hunter-Firmen importiert`,
+      summary
+    });
+  } catch (error) {
+    console.error('Fehler beim Hunter-Import:', error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: 'Fehler beim Hunter-Import: ' + error.message
+    });
+  }
+});
+
+app.post('/api/hunter/leads/:id/emails', requireAdmin, async (req, res) => {
+  try {
+    if (!hunterApiKey) {
+      return res.status(503).json({
+        success: false,
+        message: 'Hunter API ist nicht konfiguriert. Bitte HUNTER_API_KEY setzen.'
+      });
+    }
+
+    const leadResult = await dbQuery(
+      `SELECT * FROM prospect_leads WHERE id = $1 AND source = 'hunter'`,
+      [req.params.id]
+    );
+    const lead = leadResult.rows[0];
+    if (!lead) {
+      return res.status(404).json({
+        success: false,
+        message: 'Hunter-Lead nicht gefunden'
+      });
+    }
+
+    const domain = normalizeDomain(lead.domain || lead.website || '');
+    if (!domain) {
+      return res.status(400).json({
+        success: false,
+        message: 'Dieser Hunter-Lead hat keine Domain'
+      });
+    }
+
+    const url = new URL('https://api.hunter.io/v2/domain-search');
+    url.searchParams.set('domain', domain);
+    url.searchParams.set('limit', '10');
+    url.searchParams.set('api_key', hunterApiKey);
+
+    const response = await fetch(url.toString());
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(getHunterErrorMessage(response.status, data));
+    }
+
+    const emails = (data?.data?.emails || []).map(mapHunterEmail).filter(email => email.value);
+    const primaryEmail = pickPrimaryEmail(emails);
+    const now = new Date().toISOString();
+    const metadataUpdate = {
+      hunterDomainSearch: {
+        domain,
+        organization: data?.data?.organization || '',
+        pattern: data?.data?.pattern || '',
+        emailsFound: emails.length,
+        checkedAt: now
+      }
+    };
+
+    const updated = await dbQuery(
+      `UPDATE prospect_leads
+       SET emails = $1,
+           email = $2,
+           domain = $3,
+           website = COALESCE(NULLIF(website, ''), $4),
+           metadata = metadata || $5::jsonb,
+           raw_data = $6::jsonb,
+           updated_at = $7
+       WHERE id = $8
+       RETURNING *`,
+      [
+        JSON.stringify(emails),
+        primaryEmail,
+        domain,
+        `https://${domain}`,
+        JSON.stringify(metadataUpdate),
+        JSON.stringify(data),
+        now,
+        req.params.id
+      ]
+    );
+
+    return res.json({
+      success: true,
+      message: `${emails.length} E-Mail-Adressen geladen`,
+      lead: mapProspectLeadRow(updated.rows[0])
+    });
+  } catch (error) {
+    console.error('Fehler beim Laden der Hunter-E-Mails:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Fehler beim Laden der Hunter-E-Mails: ' + error.message
     });
   }
 });
@@ -1210,6 +1981,7 @@ app.get('/', (req, res) => {
     endpoints: {
       health: '/health',
       leads: '/api/leads',
+      prospects: '/api/prospect-leads',
       blog: '/api/blog/posts/published'
     }
   });

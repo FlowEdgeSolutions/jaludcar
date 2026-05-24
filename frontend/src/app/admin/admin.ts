@@ -3,6 +3,7 @@ import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../environments/environment';
+import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
 
 interface Lead {
   _id: string;
@@ -55,9 +56,61 @@ interface AIGeneratedContent {
   suggestedKeywords: string[];
 }
 
+type AdminTab = 'websiteLeads' | 'googlePlaces' | 'hunter' | 'blog';
+type ProspectSource = 'google_places' | 'hunter';
+type ProspectStatus = 'neu' | 'geprueft' | 'kontaktiert' | 'angebot' | 'gewonnen' | 'abgelehnt';
+
+interface ProspectEmail {
+  value: string;
+  type?: string;
+  confidence?: number | null;
+  firstName?: string;
+  lastName?: string;
+  position?: string;
+  phoneNumber?: string;
+  verificationStatus?: string;
+}
+
+interface ProspectLead {
+  _id: string;
+  source: ProspectSource;
+  externalId?: string;
+  companyName: string;
+  category?: string;
+  query?: string;
+  city?: string;
+  address?: string;
+  phone?: string;
+  website?: string;
+  domain?: string;
+  email?: string;
+  emails?: ProspectEmail[];
+  status: ProspectStatus;
+  notes?: string;
+  distanceMeters?: number | null;
+  lat?: number | null;
+  lng?: number | null;
+  metadata?: Record<string, any>;
+  rawData?: Record<string, any>;
+  createdAt: Date;
+  updatedAt: Date;
+  lastImportedAt?: Date;
+}
+
+interface ProspectImportSummary {
+  fetched: number;
+  imported: number;
+  created: number;
+  updated: number;
+  skippedOutsideRadius?: number;
+  skippedWithoutLocation?: number;
+  skippedWithoutDomain?: number;
+  query?: string;
+}
+
 @Component({
   selector: 'app-admin',
-  imports: [CommonModule, FormsModule, HttpClientModule],
+  imports: [CommonModule, FormsModule, HttpClientModule, DragDropModule],
   templateUrl: './admin.html',
   styleUrl: './admin.scss',
 })
@@ -71,7 +124,7 @@ export class Admin implements OnInit {
   authError = '';
   
   // Tabs
-  activeTab: 'leads' | 'blog' = 'leads';
+  activeTab: AdminTab = 'websiteLeads';
   
   // Leads
   leads: Lead[] = [];
@@ -86,6 +139,34 @@ export class Admin implements OnInit {
   selectedLead: Lead | null = null;
   filterStatus: string = 'all';
   searchTerm: string = '';
+
+  // Prospect Lead Generation
+  readonly prospectStatuses: { id: ProspectStatus; label: string }[] = [
+    { id: 'neu', label: 'Neu' },
+    { id: 'geprueft', label: 'Geprüft' },
+    { id: 'kontaktiert', label: 'Kontaktiert' },
+    { id: 'angebot', label: 'Angebot' },
+    { id: 'gewonnen', label: 'Gewonnen' },
+    { id: 'abgelehnt', label: 'Abgelehnt' }
+  ];
+  googleCategories: string[] = [];
+  selectedGoogleCategory = '';
+  googleLeads: ProspectLead[] = [];
+  filteredGoogleLeads: ProspectLead[] = [];
+  googleSearchTerm = '';
+  googleLoading = false;
+  googleImporting = false;
+  googleImportSummary: ProspectImportSummary | null = null;
+  hunterLeads: ProspectLead[] = [];
+  filteredHunterLeads: ProspectLead[] = [];
+  hunterIndustry = '';
+  hunterCity = 'Hattingen';
+  hunterCountryCode = 'DE';
+  hunterSearchTerm = '';
+  hunterLoading = false;
+  hunterImporting = false;
+  hunterImportSummary: ProspectImportSummary | null = null;
+  loadingHunterEmailsId = '';
   
   // Blog
   blogPosts: BlogPost[] = [];
@@ -195,6 +276,9 @@ export class Admin implements OnInit {
         this.authPassword = '';
         this.loadLeads();
         this.loadStats();
+        this.loadGoogleCategories();
+        this.loadProspectLeads('google_places');
+        this.loadProspectLeads('hunter');
         this.loadBlogPosts();
       },
       error: () => {
@@ -213,6 +297,10 @@ export class Admin implements OnInit {
     this.authPassword = '';
     this.leads = [];
     this.filteredLeads = [];
+    this.googleLeads = [];
+    this.filteredGoogleLeads = [];
+    this.hunterLeads = [];
+    this.filteredHunterLeads = [];
     this.blogPosts = [];
     this.filteredPosts = [];
     this.stats = { total: 0, neu: 0, kontaktiert: 0, abgeschlossen: 0, packages: [] };
@@ -227,6 +315,9 @@ export class Admin implements OnInit {
         this.authLoading = false;
         this.loadLeads();
         this.loadStats();
+        this.loadGoogleCategories();
+        this.loadProspectLeads('google_places');
+        this.loadProspectLeads('hunter');
         this.loadBlogPosts();
       },
       error: () => {
@@ -244,7 +335,7 @@ export class Admin implements OnInit {
   // TAB SWITCHING
   // ============================================
   
-  switchTab(tab: 'leads' | 'blog') {
+  switchTab(tab: AdminTab) {
     this.activeTab = tab;
     this.error = '';
     this.successMessage = '';
@@ -405,6 +496,309 @@ export class Admin implements OnInit {
       hour: '2-digit',
       minute: '2-digit'
     });
+  }
+
+  // ============================================
+  // PROSPECT LEAD GENERATION
+  // ============================================
+
+  loadGoogleCategories() {
+    if (!this.isAuthenticated) return;
+
+    this.http.get<{ success: boolean; categories: string[] }>(
+      `${this.apiUrl}/google-places/categories`,
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        this.googleCategories = response.categories || [];
+        if (!this.selectedGoogleCategory && this.googleCategories.length > 0) {
+          this.selectedGoogleCategory = this.googleCategories[0];
+        }
+      },
+      error: (err) => {
+        console.error('Fehler beim Laden der Google-Places-Kategorien:', err);
+      }
+    });
+  }
+
+  loadProspectLeads(source: ProspectSource) {
+    if (!this.isAuthenticated) return;
+    this.setProspectLoading(source, true);
+
+    this.http.get<{ success: boolean; leads: ProspectLead[] }>(
+      `${this.apiUrl}/prospect-leads?source=${source}`,
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        if (source === 'google_places') {
+          this.googleLeads = response.leads || [];
+          this.applyGoogleFilters();
+        } else {
+          this.hunterLeads = response.leads || [];
+          this.applyHunterFilters();
+        }
+        this.setProspectLoading(source, false);
+      },
+      error: (err) => {
+        this.error = 'Fehler beim Laden der Akquise-Leads';
+        this.setProspectLoading(source, false);
+        console.error(err);
+      }
+    });
+  }
+
+  private setProspectLoading(source: ProspectSource, value: boolean) {
+    if (source === 'google_places') {
+      this.googleLoading = value;
+    } else {
+      this.hunterLoading = value;
+    }
+  }
+
+  importGooglePlaces() {
+    if (!this.selectedGoogleCategory) {
+      this.error = 'Bitte eine Kategorie wählen';
+      return;
+    }
+
+    this.googleImporting = true;
+    this.error = '';
+    this.successMessage = '';
+    this.googleImportSummary = null;
+
+    this.http.post<{ success: boolean; message: string; summary: ProspectImportSummary }>(
+      `${this.apiUrl}/google-places/import`,
+      { category: this.selectedGoogleCategory },
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        this.googleImportSummary = response.summary;
+        this.successMessage = response.message;
+        this.googleImporting = false;
+        this.loadProspectLeads('google_places');
+        setTimeout(() => this.successMessage = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Fehler beim Google-Places-Import';
+        this.googleImporting = false;
+        console.error(err);
+      }
+    });
+  }
+
+  importHunterCompanies() {
+    if (!this.hunterIndustry.trim() || !this.hunterCity.trim()) {
+      this.error = 'Bitte Branche und Stadt eingeben';
+      return;
+    }
+
+    this.hunterImporting = true;
+    this.error = '';
+    this.successMessage = '';
+    this.hunterImportSummary = null;
+
+    this.http.post<{ success: boolean; message: string; summary: ProspectImportSummary }>(
+      `${this.apiUrl}/hunter/import`,
+      {
+        industry: this.hunterIndustry.trim(),
+        city: this.hunterCity.trim(),
+        countryCode: this.hunterCountryCode.trim() || 'DE'
+      },
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        this.hunterImportSummary = response.summary;
+        this.successMessage = response.message;
+        this.hunterImporting = false;
+        this.loadProspectLeads('hunter');
+        setTimeout(() => this.successMessage = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Fehler beim Hunter-Import';
+        this.hunterImporting = false;
+        console.error(err);
+      }
+    });
+  }
+
+  applyGoogleFilters() {
+    this.filteredGoogleLeads = this.filterProspectLeads(this.googleLeads, this.googleSearchTerm);
+  }
+
+  applyHunterFilters() {
+    this.filteredHunterLeads = this.filterProspectLeads(this.hunterLeads, this.hunterSearchTerm);
+  }
+
+  private filterProspectLeads(leads: ProspectLead[], term: string) {
+    const normalized = term.trim().toLowerCase();
+    if (!normalized) {
+      return [...leads];
+    }
+
+    return leads.filter(lead => [
+      lead.companyName,
+      lead.category,
+      lead.city,
+      lead.address,
+      lead.phone,
+      lead.website,
+      lead.domain,
+      lead.email
+    ].some(value => (value || '').toLowerCase().includes(normalized)));
+  }
+
+  getProspectLeadsByStatus(source: ProspectSource, status: ProspectStatus) {
+    const leads = source === 'google_places' ? this.filteredGoogleLeads : this.filteredHunterLeads;
+    return leads.filter(lead => lead.status === status);
+  }
+
+  getProspectDropListId(source: ProspectSource, status: ProspectStatus) {
+    return `${source}-${status}`;
+  }
+
+  getProspectDropListIds(source: ProspectSource) {
+    return this.prospectStatuses.map(status => this.getProspectDropListId(source, status.id));
+  }
+
+  onProspectDrop(event: CdkDragDrop<ProspectLead[]>, source: ProspectSource, status: ProspectStatus) {
+    const lead = event.item.data as ProspectLead;
+    if (!lead || lead.status === status) {
+      return;
+    }
+
+    const previousStatus = lead.status;
+    lead.status = status;
+    this.applyProspectFiltersForSource(source);
+    this.updateProspectLead(lead, { status }, () => {
+      lead.status = previousStatus;
+      this.applyProspectFiltersForSource(source);
+    });
+  }
+
+  saveProspectNotes(lead: ProspectLead) {
+    this.updateProspectLead(lead, { notes: lead.notes || '' });
+  }
+
+  private updateProspectLead(
+    lead: ProspectLead,
+    update: Partial<Pick<ProspectLead, 'status' | 'notes'>>,
+    onError?: () => void
+  ) {
+    this.http.patch<{ success: boolean; lead: ProspectLead }>(
+      `${this.apiUrl}/prospect-leads/${lead._id}`,
+      update,
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        this.replaceProspectLead(response.lead);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Fehler beim Aktualisieren des Akquise-Leads';
+        onError?.();
+        console.error(err);
+      }
+    });
+  }
+
+  deleteProspectLead(lead: ProspectLead) {
+    if (!confirm('Akquise-Lead wirklich löschen?')) return;
+
+    this.http.delete<{ success: boolean; message: string }>(
+      `${this.apiUrl}/prospect-leads/${lead._id}`,
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        this.successMessage = response.message;
+        if (lead.source === 'google_places') {
+          this.googleLeads = this.googleLeads.filter(item => item._id !== lead._id);
+          this.applyGoogleFilters();
+        } else {
+          this.hunterLeads = this.hunterLeads.filter(item => item._id !== lead._id);
+          this.applyHunterFilters();
+        }
+        setTimeout(() => this.successMessage = '', 3000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Fehler beim Löschen';
+        console.error(err);
+      }
+    });
+  }
+
+  loadHunterEmails(lead: ProspectLead) {
+    this.loadingHunterEmailsId = lead._id;
+    this.error = '';
+
+    this.http.post<{ success: boolean; message: string; lead: ProspectLead }>(
+      `${this.apiUrl}/hunter/leads/${lead._id}/emails`,
+      {},
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        this.replaceProspectLead(response.lead);
+        this.successMessage = response.message;
+        this.loadingHunterEmailsId = '';
+        setTimeout(() => this.successMessage = '', 3000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Fehler beim Laden der Hunter-E-Mails';
+        this.loadingHunterEmailsId = '';
+        console.error(err);
+      }
+    });
+  }
+
+  private replaceProspectLead(updated: ProspectLead) {
+    const target = updated.source === 'google_places' ? this.googleLeads : this.hunterLeads;
+    const index = target.findIndex(lead => lead._id === updated._id);
+    if (index >= 0) {
+      target[index] = updated;
+    } else {
+      target.unshift(updated);
+    }
+    this.applyProspectFiltersForSource(updated.source);
+  }
+
+  private applyProspectFiltersForSource(source: ProspectSource) {
+    if (source === 'google_places') {
+      this.applyGoogleFilters();
+    } else {
+      this.applyHunterFilters();
+    }
+  }
+
+  getProspectStatusLabel(status: string) {
+    return this.prospectStatuses.find(item => item.id === status)?.label || status;
+  }
+
+  getProspectStatusColor(status: string) {
+    const colors: { [key: string]: string } = {
+      neu: '#f59e0b',
+      geprueft: '#6366f1',
+      kontaktiert: '#2563eb',
+      angebot: '#7c3aed',
+      gewonnen: '#059669',
+      abgelehnt: '#dc2626'
+    };
+    return colors[status] || '#6b7280';
+  }
+
+  formatDistance(meters?: number | null) {
+    if (meters === null || meters === undefined) {
+      return '-';
+    }
+    if (meters < 1000) {
+      return `${meters} m`;
+    }
+    return `${(meters / 1000).toFixed(1)} km`;
+  }
+
+  getPrimaryProspectEmail(lead: ProspectLead) {
+    return lead.email || lead.emails?.find(email => email.value)?.value || '';
+  }
+
+  getHunterEmailCount(lead: ProspectLead) {
+    return lead.emails?.length || lead.metadata?.['emailsCount']?.total || 0;
   }
 
   // ============================================

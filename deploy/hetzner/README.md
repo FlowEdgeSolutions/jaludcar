@@ -85,10 +85,17 @@ RESEND_API_KEY=<RESEND_API_KEY>
 RESEND_FROM=JALUD Premium Autopflege <info@jalud.de>
 RESEND_TO=info@jalud.de
 RESEND_REPLY_TO=
+GOOGLE_PLACES_API_KEY=<GOOGLE_PLACES_API_KEY>
+HUNTER_API_KEY=<HUNTER_API_KEY>
+JALUD_LEAD_CENTER_LAT=51.41109
+JALUD_LEAD_CENTER_LNG=7.19951
+JALUD_LEAD_RADIUS_METERS=15000
 MISTRAL_API_KEY=<MISTRAL_API_KEY>
 MISTRAL_MODEL=mistral-small-latest
 MISTRAL_BASE_URL=https://api.mistral.ai/v1
 ```
+
+`GOOGLE_PLACES_API_KEY` und `HUNTER_API_KEY` werden nur fuer die Admin-Lead-Generierung benoetigt. Ohne diese Werte startet die API trotzdem; die jeweiligen Import-Endpunkte melden dann eine 503-Konfigurationsmeldung.
 
 Kopiere keine alten Vercel/Railway-Importdateien auf den Server. Fuer Hetzner ist `backend/.env` die einzige Runtime-Env-Datei.
 
