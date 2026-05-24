@@ -13,7 +13,6 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
-    "@google/genai": "^1.5.1",
     "bcryptjs": "^2.4.3",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
@@ -21,7 +20,6 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "multer": "^2.0.2",
-    "nodemailer": "^7.0.10",
     "pg": "^8.17.2"
   }
 }

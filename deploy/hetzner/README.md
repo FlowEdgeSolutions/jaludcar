@@ -81,10 +81,13 @@ DATABASE_URL=postgresql://jalud:<PASSWORT>@127.0.0.1:5432/jalud
 JWT_SECRET=<LANGES_RANDOM_SECRET>
 ADMIN_EMAIL=<ADMIN_EMAIL>
 ADMIN_PASSWORD=<ADMIN_PASSWORT>
-EMAIL_USER=<SMTP_USER>
-EMAIL_PASSWORD=<SMTP_PASSWORT>
-EMAIL_FROM=JALUD Premium Autopflege <info@jalud.de>
-EMAIL_ADMIN=info@jalud.de
+RESEND_API_KEY=<RESEND_API_KEY>
+RESEND_FROM=JALUD Premium Autopflege <info@jalud.de>
+RESEND_TO=info@jalud.de
+RESEND_REPLY_TO=
+MISTRAL_API_KEY=<MISTRAL_API_KEY>
+MISTRAL_MODEL=mistral-small-latest
+MISTRAL_BASE_URL=https://api.mistral.ai/v1
 ```
 
 Kopiere keine alten Vercel/Railway-Importdateien auf den Server. Fuer Hetzner ist `backend/.env` die einzige Runtime-Env-Datei.

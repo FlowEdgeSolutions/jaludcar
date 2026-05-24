@@ -1,18 +1,16 @@
 {
-  "openai": {
-    "apiKey": "YOUR_OPENAI_API_KEY",
-    "model": "gpt-4o-mini"
+  "mistral": {
+    "apiKey": "YOUR_MISTRAL_API_KEY",
+    "model": "mistral-small-latest",
+    "baseUrl": "https://api.mistral.ai/v1"
   },
   "blog": {
     "imagesPath": "uploads/blog"
   },
-  "email": {
-    "host": "smtp.strato.de",
-    "port": 465,
-    "secure": true,
-    "user": "YOUR_EMAIL@jalud.de",
-    "password": "YOUR_EMAIL_PASSWORD",
-    "from": "JALUD Premium Autopflege <YOUR_EMAIL@jalud.de>",
-    "adminEmail": "YOUR_EMAIL@jalud.de"
+  "resend": {
+    "apiKey": "YOUR_RESEND_API_KEY",
+    "from": "JALUD Premium Autopflege <info@jalud.de>",
+    "to": "info@jalud.de",
+    "replyTo": ""
   }
 }

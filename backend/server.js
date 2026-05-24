@@ -15,22 +15,20 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 const defaultConfig = {
-  openai: {
+  mistral: {
     apiKey: '',
-    model: 'gpt-4o-mini'
+    model: 'mistral-small-latest',
+    baseUrl: 'https://api.mistral.ai/v1'
   },
   blog: {
     imagesPath: 'public/images/blog',
     postsPath: 'backend/data/blog-posts.json'
   },
-  email: {
-    host: '',
-    port: 465,
-    secure: true,
-    user: '',
-    password: '',
-    from: '',
-    adminEmail: ''
+  resend: {
+    apiKey: '',
+    from: 'JALUD Premium Autopflege <info@jalud.de>',
+    to: 'info@jalud.de',
+    replyTo: ''
   }
 };
 
@@ -43,17 +41,17 @@ try {
     config = {
       ...defaultConfig,
       ...localConfig,
-      openai: {
-        ...defaultConfig.openai,
-        ...(localConfig.openai || {})
+      mistral: {
+        ...defaultConfig.mistral,
+        ...(localConfig.mistral || {})
       },
       blog: {
         ...defaultConfig.blog,
         ...(localConfig.blog || {})
       },
-      email: {
-        ...defaultConfig.email,
-        ...(localConfig.email || {})
+      resend: {
+        ...defaultConfig.resend,
+        ...(localConfig.resend || {})
       }
     };
   }
@@ -62,27 +60,33 @@ try {
   config = { ...defaultConfig };
 }
 
-config.openai.apiKey = process.env.OPENAI_API_KEY || config.openai.apiKey;
-config.openai.model = process.env.OPENAI_MODEL || config.openai.model;
+config.mistral.apiKey = process.env.MISTRAL_API_KEY || config.mistral.apiKey;
+config.mistral.model = process.env.MISTRAL_MODEL || config.mistral.model;
+config.mistral.baseUrl = process.env.MISTRAL_BASE_URL || config.mistral.baseUrl;
 config.blog.imagesPath = config.blog.imagesPath || defaultConfig.blog.imagesPath;
 config.blog.postsPath = config.blog.postsPath || defaultConfig.blog.postsPath;
-config.email = {
-  host: process.env.EMAIL_HOST || config.email.host,
-  port: parseInt(process.env.EMAIL_PORT || `${config.email.port}`, 10),
-  secure: process.env.EMAIL_SECURE ? process.env.EMAIL_SECURE === 'true' : config.email.secure,
-  user: process.env.EMAIL_USER || config.email.user,
-  password: process.env.EMAIL_PASSWORD || config.email.password,
-  from: process.env.EMAIL_FROM || config.email.from,
-  adminEmail: process.env.EMAIL_ADMIN || config.email.adminEmail
+config.resend = {
+  apiKey: process.env.RESEND_API_KEY || config.resend.apiKey,
+  from: process.env.RESEND_FROM || config.resend.from,
+  to: process.env.RESEND_TO || config.resend.to,
+  replyTo: process.env.RESEND_REPLY_TO || config.resend.replyTo
 };
 
-const openaiApiKey = config.openai.apiKey;
-const openaiModel = config.openai.model || defaultConfig.openai.model;
-const openaiBaseUrl = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1').replace(/\/$/, '');
-if (openaiApiKey) {
-  console.log('✅ OpenAI API konfiguriert');
+const mistralApiKey = config.mistral.apiKey;
+const mistralModel = config.mistral.model || defaultConfig.mistral.model;
+const mistralBaseUrl = (config.mistral.baseUrl || defaultConfig.mistral.baseUrl).replace(/\/$/, '');
+if (mistralApiKey) {
+  console.log('✅ Mistral API konfiguriert');
 } else {
-  console.log('⚠️  OpenAI API nicht konfiguriert (nur für Blog-Generierung benötigt).');
+  console.log('⚠️  Mistral API nicht konfiguriert (nur für Blog-Generierung benötigt).');
+}
+
+const resendConfig = config.resend;
+const resendEnabled = Boolean(resendConfig.apiKey && resendConfig.from && resendConfig.to);
+if (resendEnabled) {
+  console.log('✅ Resend E-Mail Versand konfiguriert');
+} else {
+  console.log('⚠️  Resend E-Mail Versand nicht konfiguriert (Lead-Speicherung funktioniert trotzdem).');
 }
 
 const jwtSecret = process.env.JWT_SECRET || '';
@@ -307,6 +311,106 @@ fs.mkdirSync(blogUploadDir, { recursive: true });
 
 app.use('/uploads', express.static(uploadsBaseDir));
 
+function escapeHtml(value = '') {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function splitEmailList(value = '') {
+  return String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function getPackageLabel(value = '') {
+  const labels = {
+    basis: 'Basis Paket',
+    premium: 'Premium Paket',
+    luxus: 'Luxus Paket',
+    individual: 'Individuelles Paket'
+  };
+
+  return labels[value] || value;
+}
+
+async function sendResendEmail({ subject, html, text, replyTo }) {
+  if (!resendEnabled) {
+    return;
+  }
+
+  const payload = {
+    from: resendConfig.from,
+    to: splitEmailList(resendConfig.to),
+    subject,
+    html,
+    text
+  };
+
+  const replyToAddress = replyTo || resendConfig.replyTo;
+  if (replyToAddress) {
+    payload.reply_to = replyToAddress;
+  }
+
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${resendConfig.apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message = data?.message || data?.error?.message || `Resend request failed (${response.status})`;
+    throw new Error(message);
+  }
+}
+
+async function sendLeadNotification(lead) {
+  const fullName = `${lead.firstName} ${lead.lastName}`.trim();
+  const packageLabel = getPackageLabel(lead.package);
+  const submittedAt = new Date(lead.createdAt).toLocaleString('de-DE', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+    timeZone: 'Europe/Berlin'
+  });
+
+  const html = `
+    <h2>Neue Anfrage ueber jalud.de</h2>
+    <table cellpadding="8" cellspacing="0" style="border-collapse: collapse;">
+      <tr><td><strong>Name</strong></td><td>${escapeHtml(fullName)}</td></tr>
+      <tr><td><strong>Telefon</strong></td><td>${escapeHtml(lead.phone)}</td></tr>
+      <tr><td><strong>E-Mail</strong></td><td>${escapeHtml(lead.email)}</td></tr>
+      <tr><td><strong>Paket</strong></td><td>${escapeHtml(packageLabel)}</td></tr>
+      <tr><td><strong>Zeitpunkt</strong></td><td>${escapeHtml(submittedAt)}</td></tr>
+      <tr><td><strong>Nachricht</strong></td><td>${escapeHtml(lead.message || '-')}</td></tr>
+    </table>
+  `;
+
+  const text = [
+    'Neue Anfrage ueber jalud.de',
+    `Name: ${fullName}`,
+    `Telefon: ${lead.phone}`,
+    `E-Mail: ${lead.email}`,
+    `Paket: ${packageLabel}`,
+    `Zeitpunkt: ${submittedAt}`,
+    `Nachricht: ${lead.message || '-'}`
+  ].join('\n');
+
+  await sendResendEmail({
+    subject: `Neue Anfrage von ${fullName || 'jalud.de'}`,
+    html,
+    text,
+    replyTo: lead.email
+  });
+}
+
 // Multer configuration for image uploads
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
@@ -412,7 +516,22 @@ app.post('/api/leads', async (req, res) => {
     );
     
     console.log('✅ Lead gespeichert:', id);
-    
+
+    try {
+      await sendLeadNotification({
+        id,
+        firstName,
+        lastName,
+        phone,
+        email,
+        package: pkg,
+        message: message || '',
+        createdAt: now
+      });
+    } catch (emailError) {
+      console.error('Fehler beim Versand der Lead-Benachrichtigung:', emailError);
+    }
+
     res.status(201).json({ 
       success: true, 
       message: 'Anfrage erfolgreich gesendet!',
@@ -594,7 +713,7 @@ app.get('/api/stats', requireAdmin, async (req, res) => {
   }
 });
 
-// POST - Generate blog post with OpenAI
+// POST - Generate blog post with Mistral
 app.post('/api/blog/generate', requireAdmin, async (req, res) => {
   try {
     const { topic, keywords, category, tone = 'professional' } = req.body;
@@ -606,10 +725,10 @@ app.post('/api/blog/generate', requireAdmin, async (req, res) => {
       });
     }
     
-    if (!openaiApiKey) {
+    if (!mistralApiKey) {
       return res.status(503).json({
         success: false,
-        message: 'OpenAI API ist nicht konfiguriert. Bitte OPENAI_API_KEY setzen.'
+        message: 'Mistral API ist nicht konfiguriert. Bitte MISTRAL_API_KEY setzen.'
       });
     }
     
@@ -648,8 +767,8 @@ Format als JSON:
   "suggestedKeywords": ["keyword1", "keyword2", ...]
 }`;
     
-    const openaiPayload = {
-      model: openaiModel,
+    const mistralPayload = {
+      model: mistralModel,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt }
@@ -660,45 +779,45 @@ Format als JSON:
 
     const headers = {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${openaiApiKey}`
+      Authorization: `Bearer ${mistralApiKey}`
     };
 
-    let openaiResponse = await fetch(`${openaiBaseUrl}/chat/completions`, {
+    let mistralResponse = await fetch(`${mistralBaseUrl}/chat/completions`, {
       method: 'POST',
       headers,
-      body: JSON.stringify(openaiPayload)
+      body: JSON.stringify(mistralPayload)
     });
 
-    let openaiData = await openaiResponse.json().catch(() => null);
+    let mistralData = await mistralResponse.json().catch(() => null);
 
     // Some models/routers don't support response_format; retry without it.
     if (
-      !openaiResponse.ok &&
-      openaiResponse.status === 400 &&
-      openaiData?.error?.message &&
-      /response_format/i.test(openaiData.error.message)
+      !mistralResponse.ok &&
+      mistralResponse.status === 400 &&
+      mistralData?.error?.message &&
+      /response_format/i.test(mistralData.error.message)
     ) {
-      const retryPayload = { ...openaiPayload };
+      const retryPayload = { ...mistralPayload };
       delete retryPayload.response_format;
 
-      openaiResponse = await fetch(`${openaiBaseUrl}/chat/completions`, {
+      mistralResponse = await fetch(`${mistralBaseUrl}/chat/completions`, {
         method: 'POST',
         headers,
         body: JSON.stringify(retryPayload)
       });
-      openaiData = await openaiResponse.json().catch(() => null);
+      mistralData = await mistralResponse.json().catch(() => null);
     }
 
-    if (!openaiResponse.ok) {
+    if (!mistralResponse.ok) {
       const msg =
-        openaiData?.error?.message ||
-        `OpenAI API request failed (${openaiResponse.status})`;
+        mistralData?.error?.message ||
+        `Mistral API request failed (${mistralResponse.status})`;
       throw new Error(msg);
     }
 
-    const contentText = openaiData?.choices?.[0]?.message?.content;
+    const contentText = mistralData?.choices?.[0]?.message?.content;
     if (!contentText) {
-      throw new Error('OpenAI API: Leere Antwort');
+      throw new Error('Mistral API: Leere Antwort');
     }
 
     let generatedContent;
