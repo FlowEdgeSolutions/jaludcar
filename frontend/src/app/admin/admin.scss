@@ -49,6 +49,16 @@ $primary-color: #1a1a1a;
     color: #000000;
     text-decoration: none;
   }
+
+  .spinner {
+    width: 42px;
+    height: 42px;
+    border: 4px solid #e5e7eb;
+    border-top-color: #000000;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 1rem auto 0;
+  }
 }
 
 .admin-container {

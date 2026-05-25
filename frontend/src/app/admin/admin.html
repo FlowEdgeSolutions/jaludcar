@@ -1,17 +1,31 @@
 <!-- Admin Login -->
-<div class="admin-auth" *ngIf="!isAuthenticated">
+<div class="admin-auth" *ngIf="!authReady">
+  <div class="auth-card">
+    <h1>Admin wird geladen</h1>
+    <p>{{ authRestoring ? 'Session wird geprüft...' : 'Bitte warten...' }}</p>
+    <div class="spinner"></div>
+  </div>
+</div>
+
+<div class="admin-auth" *ngIf="authReady && !isAuthenticated">
   <div class="auth-card">
     <h1>Admin Login</h1>
     <p>Nur für Mitarbeiter</p>
     <input
       type="email"
       [(ngModel)]="authEmail"
+      name="adminEmail"
+      autocomplete="username"
+      (keyup.enter)="login()"
       placeholder="Email">
     <input
       type="password"
       [(ngModel)]="authPassword"
+      name="adminPassword"
+      autocomplete="current-password"
+      (keyup.enter)="login()"
       placeholder="Passwort">
-    <button class="btn-login" (click)="login()" [disabled]="authLoading || !authEmail || !authPassword">
+    <button type="button" class="btn-login" (click)="login()" [disabled]="authLoading || !authEmail || !authPassword">
       {{ authLoading ? 'Prüfe...' : 'Einloggen' }}
     </button>
     <div class="message error" *ngIf="authError">{{ authError }}</div>

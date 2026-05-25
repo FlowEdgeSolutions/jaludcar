@@ -160,6 +160,8 @@ export class Admin implements OnInit, OnDestroy {
   authPassword = '';
   isAuthenticated = false;
   authLoading = false;
+  authReady = false;
+  authRestoring = false;
   authError = '';
   
   // Tabs
@@ -260,6 +262,10 @@ export class Admin implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit() {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
     this.initAuth();
   }
 
@@ -369,7 +375,19 @@ export class Admin implements OnInit, OnDestroy {
     const saved = this.getStoredToken();
     if (saved) {
       this.verifyToken();
+      return;
     }
+
+    this.authReady = true;
+  }
+
+  private loadAdminData() {
+    this.loadLeads();
+    this.loadStats();
+    this.loadGoogleCategories();
+    this.loadProspectLeads('google_places');
+    this.loadProspectLeads('hunter');
+    this.loadBlogPosts();
   }
 
   private getStoredToken() {
@@ -390,7 +408,10 @@ export class Admin implements OnInit, OnDestroy {
       return;
     }
 
-    if (!this.authEmail || !this.authPassword) {
+    const email = this.authEmail.trim().toLowerCase();
+    const password = this.authPassword;
+
+    if (!email || !password) {
       this.authError = 'Bitte Email und Passwort eingeben';
       return;
     }
@@ -398,7 +419,7 @@ export class Admin implements OnInit, OnDestroy {
     this.authLoading = true;
     this.http.post<{ success: boolean; token: string }>(
       `${this.apiUrl}/admin/login`,
-      { email: this.authEmail, password: this.authPassword }
+      { email, password }
     ).pipe(
       timeout(this.authRequestTimeoutMs)
     ).subscribe({
@@ -407,17 +428,15 @@ export class Admin implements OnInit, OnDestroy {
           localStorage.setItem('jalud_admin_token', response.token);
         }
         this.isAuthenticated = true;
+        this.authReady = true;
         this.authLoading = false;
+        this.authEmail = email;
         this.authPassword = '';
-        this.loadLeads();
-        this.loadStats();
-        this.loadGoogleCategories();
-        this.loadProspectLeads('google_places');
-        this.loadProspectLeads('hunter');
-        this.loadBlogPosts();
+        this.loadAdminData();
       },
       error: (err) => {
         this.authLoading = false;
+        this.authReady = true;
         this.authError = this.getAuthErrorMessage(err);
       }
     });
@@ -428,6 +447,8 @@ export class Admin implements OnInit, OnDestroy {
       localStorage.removeItem('jalud_admin_token');
     }
     this.isAuthenticated = false;
+    this.authReady = true;
+    this.authRestoring = false;
     this.authEmail = '';
     this.authPassword = '';
     this.leads = [];
@@ -444,28 +465,37 @@ export class Admin implements OnInit, OnDestroy {
 
   private verifyToken() {
     this.authLoading = true;
+    this.authRestoring = true;
+    this.authReady = false;
     this.http.get<{ success: boolean }>(`${this.apiUrl}/admin/me`, this.getAuthOptions())
       .pipe(timeout(this.authRequestTimeoutMs))
       .subscribe({
       next: () => {
         this.isAuthenticated = true;
         this.authLoading = false;
-        this.loadLeads();
-        this.loadStats();
-        this.loadGoogleCategories();
-        this.loadProspectLeads('google_places');
-        this.loadProspectLeads('hunter');
-        this.loadBlogPosts();
+        this.authRestoring = false;
+        this.authReady = true;
+        this.loadAdminData();
       },
-      error: () => {
+      error: (err) => {
         this.authLoading = false;
+        this.authRestoring = false;
+        this.authReady = true;
         this.isAuthenticated = false;
-        this.authError = 'Bitte einloggen';
-        if (isPlatformBrowser(this.platformId)) {
+        this.authError = this.getSessionRestoreErrorMessage(err);
+        if (isPlatformBrowser(this.platformId) && (err?.status === 401 || err?.status === 403)) {
           localStorage.removeItem('jalud_admin_token');
         }
       }
     });
+  }
+
+  private getSessionRestoreErrorMessage(err: any) {
+    if (err?.name === 'TimeoutError' || err?.status === 0) {
+      return 'Session konnte nicht geprüft werden. Bitte erneut versuchen.';
+    }
+
+    return 'Bitte einloggen';
   }
 
   private getAuthErrorMessage(err: any) {

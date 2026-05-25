@@ -125,7 +125,7 @@ function signAdminToken(user) {
   return jwt.sign(
     { sub: user.id, email: user.email, role: user.role },
     jwtSecret,
-    { expiresIn: '12h' }
+    { expiresIn: '7d' }
   );
 }
 
