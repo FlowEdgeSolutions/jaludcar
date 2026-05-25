@@ -162,10 +162,20 @@ function requireAdmin(req, res, next) {
 // Database (PostgreSQL)
 const databaseUrl = process.env.DATABASE_URL;
 const shouldUseSSL = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+const dbConnectionTimeoutMs = parsePositiveInteger(process.env.DB_CONNECTION_TIMEOUT_MS, 10000);
+const dbQueryTimeoutMs = parsePositiveInteger(process.env.DB_QUERY_TIMEOUT_MS, 15000);
 const pool = databaseUrl
   ? new Pool({
       connectionString: databaseUrl,
-      ssl: shouldUseSSL ? { rejectUnauthorized: false } : undefined
+      ssl: shouldUseSSL ? { rejectUnauthorized: false } : undefined,
+      connectionTimeoutMillis: dbConnectionTimeoutMs,
+      query_timeout: dbQueryTimeoutMs,
+      statement_timeout: dbQueryTimeoutMs
     })
   : null;
 
@@ -264,7 +274,12 @@ async function initDb() {
       await seedAdminUser();
     })();
   }
-  return dbInitPromise;
+  try {
+    return await dbInitPromise;
+  } catch (error) {
+    dbInitPromise = null;
+    throw error;
+  }
 }
 
 async function dbQuery(text, params) {
@@ -662,7 +677,10 @@ app.post('/api/admin/login', async (req, res) => {
     });
   } catch (error) {
     console.error('Fehler beim Admin-Login:', error);
-    return res.status(500).json({ success: false, message: 'Serverfehler' });
+    return res.status(500).json({
+      success: false,
+      message: 'Login aktuell nicht möglich. Bitte Server-Konfiguration prüfen.'
+    });
   }
 });
 

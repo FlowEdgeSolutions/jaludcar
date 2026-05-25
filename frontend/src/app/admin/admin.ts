@@ -4,6 +4,7 @@ import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
 import { environment } from '../../environments/environment';
 import { CdkDragDrop, DragDropModule } from '@angular/cdk/drag-drop';
+import { timeout } from 'rxjs';
 
 interface Lead {
   _id: string;
@@ -117,6 +118,7 @@ interface ProspectImportSummary {
 export class Admin implements OnInit {
   private apiUrl = environment.apiUrl;
   private apiOrigin = this.apiUrl.replace(/\/api\/?$/, '');
+  private readonly authRequestTimeoutMs = 15000;
   authEmail = '';
   authPassword = '';
   isAuthenticated = false;
@@ -257,6 +259,10 @@ export class Admin implements OnInit {
   }
 
   login() {
+    if (this.authLoading) {
+      return;
+    }
+
     if (!this.authEmail || !this.authPassword) {
       this.authError = 'Bitte Email und Passwort eingeben';
       return;
@@ -266,6 +272,8 @@ export class Admin implements OnInit {
     this.http.post<{ success: boolean; token: string }>(
       `${this.apiUrl}/admin/login`,
       { email: this.authEmail, password: this.authPassword }
+    ).pipe(
+      timeout(this.authRequestTimeoutMs)
     ).subscribe({
       next: (response) => {
         if (isPlatformBrowser(this.platformId)) {
@@ -281,9 +289,9 @@ export class Admin implements OnInit {
         this.loadProspectLeads('hunter');
         this.loadBlogPosts();
       },
-      error: () => {
+      error: (err) => {
         this.authLoading = false;
-        this.authError = 'Ungültige Zugangsdaten';
+        this.authError = this.getAuthErrorMessage(err);
       }
     });
   }
@@ -309,6 +317,7 @@ export class Admin implements OnInit {
   private verifyToken() {
     this.authLoading = true;
     this.http.get<{ success: boolean }>(`${this.apiUrl}/admin/me`, this.getAuthOptions())
+      .pipe(timeout(this.authRequestTimeoutMs))
       .subscribe({
       next: () => {
         this.isAuthenticated = true;
@@ -329,6 +338,18 @@ export class Admin implements OnInit {
         }
       }
     });
+  }
+
+  private getAuthErrorMessage(err: any) {
+    if (err?.name === 'TimeoutError') {
+      return 'Server antwortet nicht. Bitte Backend und Datenbank prüfen.';
+    }
+
+    if (err?.status === 0) {
+      return 'Backend ist nicht erreichbar.';
+    }
+
+    return err?.error?.message || 'Ungültige Zugangsdaten';
   }
 
   // ============================================
