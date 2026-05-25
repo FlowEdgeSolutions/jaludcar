@@ -161,7 +161,10 @@ function requireAdmin(req, res, next) {
 
 // Database (PostgreSQL)
 const databaseUrl = process.env.DATABASE_URL;
-const shouldUseSSL = process.env.DB_SSL === 'true' || process.env.NODE_ENV === 'production';
+const dbSslSetting = String(process.env.DB_SSL || '').toLowerCase();
+const shouldUseSSL = dbSslSetting
+  ? dbSslSetting === 'true'
+  : process.env.NODE_ENV === 'production';
 function parsePositiveInteger(value, fallback) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
