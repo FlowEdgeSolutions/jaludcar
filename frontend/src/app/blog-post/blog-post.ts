@@ -4,6 +4,13 @@ import { HttpClient, HttpClientModule } from '@angular/common/http';
 import { ActivatedRoute, RouterModule } from '@angular/router';
 import { environment } from '../../environments/environment';
 
+interface BlogSection {
+  html: string;
+  image: string;
+  imageUrl?: string;
+  alt: string;
+}
+
 interface BlogPostData {
   id: string;
   slug: string;
@@ -11,7 +18,7 @@ interface BlogPostData {
   date: string;
   excerpt: string;
   content: string;
-  fullContent: string[];
+  fullContent: BlogSection[];
   image: string;
   category: string;
 }
@@ -53,6 +60,42 @@ export class BlogPost implements OnInit {
     return value;
   }
 
+  private escapeHtml(value = '') {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;')
+      .replace(/\n/g, '<br>');
+  }
+
+  private normalizeSections(value: unknown, fallbackContent = ''): BlogSection[] {
+    const rawSections = Array.isArray(value) && value.length > 0
+      ? value
+      : (fallbackContent ? String(fallbackContent).split(/\n\s*\n/).filter(item => item.trim()) : []);
+
+    return rawSections.map(section => {
+      if (typeof section === 'string') {
+        return {
+          html: this.escapeHtml(section),
+          image: '',
+          imageUrl: '',
+          alt: ''
+        };
+      }
+
+      const item = section as Partial<BlogSection> & { text?: string; content?: string };
+      const image = item.image || '';
+      return {
+        html: item.html || item.text || item.content || '',
+        image,
+        imageUrl: image ? this.toPublicUrl(image) : (item.imageUrl || ''),
+        alt: item.alt || ''
+      };
+    });
+  }
+
   private loadPost(slug: string) {
     this.loading = true;
     this.error = '';
@@ -62,9 +105,7 @@ export class BlogPost implements OnInit {
       .subscribe({
         next: (response) => {
           const apiPost = response.post || {};
-          const paragraphs = Array.isArray(apiPost.fullContent) && apiPost.fullContent.length > 0
-            ? apiPost.fullContent
-            : (apiPost.content ? String(apiPost.content).split(/\n\s*\n/).filter(p => p.trim()) : []);
+          const sections = this.normalizeSections(apiPost.fullContent, apiPost.content);
 
           this.post = {
             id: apiPost._id || apiPost.id || slug,
@@ -73,7 +114,7 @@ export class BlogPost implements OnInit {
             date: this.formatDate(apiPost.publishedAt || apiPost.createdAt || new Date().toISOString()),
             excerpt: apiPost.excerpt || '',
             content: apiPost.content || '',
-            fullContent: paragraphs,
+            fullContent: sections,
             image: apiPost.image ? this.toPublicUrl(apiPost.image) : '/assets/gallery-1.svg',
             category: apiPost.category || ''
           };

@@ -13,7 +13,12 @@
     </div>
 
     <div class="post-content">
-      <p *ngFor="let paragraph of post.fullContent">{{ paragraph }}</p>
+      <section class="post-section" *ngFor="let section of post.fullContent">
+        <div class="section-body" [innerHTML]="section.html"></div>
+        <figure *ngIf="section.imageUrl || section.image" class="section-image">
+          <img [src]="section.imageUrl || section.image" [alt]="section.alt || post.title">
+        </figure>
+      </section>
     </div>
 
     <div class="post-footer">

@@ -1,4 +1,4 @@
-import { Component, Inject, OnInit, PLATFORM_ID } from '@angular/core';
+import { Component, Inject, OnDestroy, OnInit, PLATFORM_ID } from '@angular/core';
 import { CommonModule, isPlatformBrowser } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { HttpClient, HttpClientModule, HttpHeaders } from '@angular/common/http';
@@ -28,13 +28,21 @@ interface Stats {
   packages: { _id: string; count: number }[];
 }
 
+interface BlogSection {
+  id: string;
+  html: string;
+  image: string;
+  imageUrl?: string;
+  alt: string;
+}
+
 interface BlogPost {
   _id?: string;
   title: string;
   slug?: string;
   excerpt: string;
   content: string;
-  fullContent: string[];
+  fullContent: BlogSection[];
   image: string;
   imageUrl?: string;
   category: string;
@@ -60,6 +68,7 @@ interface AIGeneratedContent {
 type AdminTab = 'websiteLeads' | 'googlePlaces' | 'hunter' | 'blog';
 type ProspectSource = 'google_places' | 'hunter';
 type ProspectStatus = 'neu' | 'geprueft' | 'kontaktiert' | 'angebot' | 'gewonnen' | 'abgelehnt';
+type ProspectViewMode = 'kanban' | 'list';
 
 interface ProspectEmail {
   value: string;
@@ -103,10 +112,38 @@ interface ProspectImportSummary {
   imported: number;
   created: number;
   updated: number;
+  importable?: number;
+  emailLookups?: number;
+  emailsLoaded?: number;
+  emailLookupFailed?: number;
   skippedOutsideRadius?: number;
   skippedWithoutLocation?: number;
   skippedWithoutDomain?: number;
   query?: string;
+}
+
+interface HunterPreviewCompany {
+  id: string;
+  companyName: string;
+  organization?: string;
+  name?: string;
+  domain: string;
+  website: string;
+  emailsCount?: number | null;
+  emails_count?: number | null;
+  industry: string;
+  city: string;
+  countryCode: string;
+  query: string;
+  importable: boolean;
+  selected: boolean;
+}
+
+interface HunterPreviewSummary {
+  query: string;
+  fetched: number;
+  importable: number;
+  skippedWithoutDomain: number;
 }
 
 @Component({
@@ -115,7 +152,7 @@ interface ProspectImportSummary {
   templateUrl: './admin.html',
   styleUrl: './admin.scss',
 })
-export class Admin implements OnInit {
+export class Admin implements OnInit, OnDestroy {
   private apiUrl = environment.apiUrl;
   private apiOrigin = this.apiUrl.replace(/\/api\/?$/, '');
   private readonly authRequestTimeoutMs = 15000;
@@ -145,14 +182,17 @@ export class Admin implements OnInit {
   // Prospect Lead Generation
   readonly prospectStatuses: { id: ProspectStatus; label: string }[] = [
     { id: 'neu', label: 'Neu' },
-    { id: 'geprueft', label: 'Geprüft' },
     { id: 'kontaktiert', label: 'Kontaktiert' },
     { id: 'angebot', label: 'Angebot' },
     { id: 'gewonnen', label: 'Gewonnen' },
     { id: 'abgelehnt', label: 'Abgelehnt' }
   ];
+  private readonly validProspectStatuses: ProspectStatus[] = ['neu', 'geprueft', 'kontaktiert', 'angebot', 'gewonnen', 'abgelehnt'];
   googleCategories: string[] = [];
   selectedGoogleCategory = '';
+  googleRadiusMeters = 15000;
+  googleCenterAddress = 'Auf dem Haidchen 45, 45527 Hattingen';
+  prospectViewMode: ProspectViewMode = 'kanban';
   googleLeads: ProspectLead[] = [];
   filteredGoogleLeads: ProspectLead[] = [];
   googleSearchTerm = '';
@@ -161,14 +201,21 @@ export class Admin implements OnInit {
   googleImportSummary: ProspectImportSummary | null = null;
   hunterLeads: ProspectLead[] = [];
   filteredHunterLeads: ProspectLead[] = [];
+  readonly customHunterIndustryOption = '__custom__';
   hunterIndustry = '';
+  hunterCustomIndustry = '';
   hunterCity = 'Hattingen';
   hunterCountryCode = 'DE';
   hunterSearchTerm = '';
+  hunterSearching = false;
   hunterLoading = false;
   hunterImporting = false;
   hunterImportSummary: ProspectImportSummary | null = null;
-  loadingHunterEmailsId = '';
+  hunterPreviewSummary: HunterPreviewSummary | null = null;
+  hunterPreviewCompanies: HunterPreviewCompany[] = [];
+  hunterSearchElapsedSeconds = 0;
+  selectedProspectLead: ProspectLead | null = null;
+  private hunterSearchTimer: ReturnType<typeof setInterval> | null = null;
   
   // Blog
   blogPosts: BlogPost[] = [];
@@ -216,6 +263,10 @@ export class Admin implements OnInit {
     this.initAuth();
   }
 
+  ngOnDestroy() {
+    this.stopHunterSearchTimer();
+  }
+
   private toPublicUrl(value: string): string {
     if (!value) return '';
     if (/^https?:\/\//i.test(value)) return value;
@@ -228,14 +279,90 @@ export class Admin implements OnInit {
     return value;
   }
 
-  private syncBlogContentFromParagraphs() {
-    const paragraphs = Array.isArray(this.blogForm.fullContent) ? this.blogForm.fullContent : [];
-    const normalized = paragraphs
-      .map(p => (p ?? '').toString().trim())
-      .filter(p => p.length > 0);
+  private createBlogSection(html = '', image = '', alt = ''): BlogSection {
+    const id = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID()
+      : `section-${Date.now()}-${Math.round(Math.random() * 100000)}`;
 
-    this.blogForm.fullContent = normalized;
-    this.blogForm.content = normalized.join('\n\n');
+    return {
+      id,
+      html,
+      image,
+      imageUrl: image ? this.toPublicUrl(image) : '',
+      alt
+    };
+  }
+
+  private escapeHtml(value = '') {
+    return String(value)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  private textToSectionHtml(value = '') {
+    return this.escapeHtml(value).replace(/\n/g, '<br>');
+  }
+
+  private stripHtml(value = '') {
+    return String(value)
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|h[1-6]|li)>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  private normalizeBlogSections(value: unknown, fallbackContent = ''): BlogSection[] {
+    const rawSections = Array.isArray(value) && value.length > 0
+      ? value
+      : (fallbackContent ? String(fallbackContent).split(/\n\s*\n/).filter(item => item.trim()) : []);
+
+    const sections = rawSections.map(section => {
+      if (typeof section === 'string') {
+        return this.createBlogSection(this.textToSectionHtml(section));
+      }
+
+      const item = section as Partial<BlogSection> & { text?: string; content?: string };
+      const html = item.html || item.text || item.content || '';
+      const image = item.image || '';
+      return {
+        id: item.id || this.createBlogSection().id,
+        html,
+        image,
+        imageUrl: image ? this.toPublicUrl(image) : (item.imageUrl || ''),
+        alt: item.alt || ''
+      };
+    });
+
+    return sections.length > 0 ? sections : [this.createBlogSection()];
+  }
+
+  private syncBlogContentFromParagraphs() {
+    const sections = this.normalizeBlogSections(this.blogForm.fullContent);
+    const normalized = sections
+      .map(section => ({
+        ...section,
+        html: (section.html || '').trim(),
+        alt: (section.alt || '').trim()
+      }))
+      .filter(section => this.stripHtml(section.html).length > 0 || Boolean(section.image));
+
+    this.blogForm.fullContent = normalized.length > 0 ? normalized : [this.createBlogSection()];
+    this.blogForm.content = this.blogForm.fullContent
+      .map(section => this.stripHtml(section.html))
+      .filter(Boolean)
+      .join('\n\n');
   }
 
   private initAuth() {
@@ -309,6 +436,7 @@ export class Admin implements OnInit {
     this.filteredGoogleLeads = [];
     this.hunterLeads = [];
     this.filteredHunterLeads = [];
+    this.selectedProspectLead = null;
     this.blogPosts = [];
     this.filteredPosts = [];
     this.stats = { total: 0, neu: 0, kontaktiert: 0, abgeschlossen: 0, packages: [] };
@@ -526,12 +654,19 @@ export class Admin implements OnInit {
   loadGoogleCategories() {
     if (!this.isAuthenticated) return;
 
-    this.http.get<{ success: boolean; categories: string[] }>(
+    this.http.get<{
+      success: boolean;
+      categories: string[];
+      radiusMeters?: number;
+      center?: { address?: string };
+    }>(
       `${this.apiUrl}/google-places/categories`,
       this.getAuthOptions()
     ).subscribe({
       next: (response) => {
         this.googleCategories = response.categories || [];
+        this.googleRadiusMeters = response.radiusMeters || this.googleRadiusMeters;
+        this.googleCenterAddress = response.center?.address || this.googleCenterAddress;
         if (!this.selectedGoogleCategory && this.googleCategories.length > 0) {
           this.selectedGoogleCategory = this.googleCategories[0];
         }
@@ -576,6 +711,54 @@ export class Admin implements OnInit {
     }
   }
 
+  get isCustomHunterIndustry() {
+    return this.hunterIndustry === this.customHunterIndustryOption;
+  }
+
+  get effectiveHunterIndustry() {
+    return this.isCustomHunterIndustry
+      ? this.hunterCustomIndustry.trim()
+      : this.hunterIndustry.trim();
+  }
+
+  get hunterSearchEtaLabel() {
+    if (this.hunterSearchElapsedSeconds < 20) {
+      return 'ca. 20-45 Sekunden';
+    }
+    if (this.hunterSearchElapsedSeconds < 45) {
+      return 'noch einen Moment';
+    }
+    return 'die Suche braucht gerade länger als üblich';
+  }
+
+  get selectedHunterPreviewCount() {
+    return this.hunterPreviewCompanies.filter(company => company.importable && company.selected).length;
+  }
+
+  get importableHunterPreviewCount() {
+    return this.hunterPreviewCompanies.filter(company => company.importable).length;
+  }
+
+  get areAllHunterPreviewCompaniesSelected() {
+    const importable = this.hunterPreviewCompanies.filter(company => company.importable);
+    return importable.length > 0 && importable.every(company => company.selected);
+  }
+
+  private startHunterSearchTimer() {
+    this.stopHunterSearchTimer();
+    this.hunterSearchElapsedSeconds = 0;
+    this.hunterSearchTimer = setInterval(() => {
+      this.hunterSearchElapsedSeconds += 1;
+    }, 1000);
+  }
+
+  private stopHunterSearchTimer() {
+    if (this.hunterSearchTimer) {
+      clearInterval(this.hunterSearchTimer);
+      this.hunterSearchTimer = null;
+    }
+  }
+
   importGooglePlaces() {
     if (!this.selectedGoogleCategory) {
       this.error = 'Bitte eine Kategorie wählen';
@@ -607,9 +790,100 @@ export class Admin implements OnInit {
     });
   }
 
-  importHunterCompanies() {
-    if (!this.hunterIndustry.trim() || !this.hunterCity.trim()) {
+  searchHunterCompanies() {
+    const industry = this.effectiveHunterIndustry;
+
+    if (!industry || !this.hunterCity.trim()) {
       this.error = 'Bitte Branche und Stadt eingeben';
+      return;
+    }
+
+    this.hunterSearching = true;
+    this.error = '';
+    this.successMessage = '';
+    this.hunterImportSummary = null;
+    this.hunterPreviewSummary = null;
+    this.hunterPreviewCompanies = [];
+    this.startHunterSearchTimer();
+
+    this.http.post<{
+      success: boolean;
+      message: string;
+      summary: HunterPreviewSummary;
+      companies: HunterPreviewCompany[];
+    }>(
+      `${this.apiUrl}/hunter/preview`,
+      {
+        industry,
+        city: this.hunterCity.trim(),
+        countryCode: this.hunterCountryCode.trim() || 'DE'
+      },
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        this.hunterPreviewSummary = response.summary;
+        this.hunterPreviewCompanies = (response.companies || []).map(company => ({
+          ...company,
+          selected: company.importable
+        }));
+        this.successMessage = response.message;
+        this.hunterSearching = false;
+        this.stopHunterSearchTimer();
+        setTimeout(() => this.successMessage = '', 4000);
+      },
+      error: (err) => {
+        this.error = err.error?.message || 'Fehler bei der Firmensuche';
+        this.hunterSearching = false;
+        this.stopHunterSearchTimer();
+        console.error(err);
+      }
+    });
+  }
+
+  toggleAllHunterPreviewCompanies(event: Event) {
+    const checked = (event.target as HTMLInputElement).checked;
+    this.hunterPreviewCompanies = this.hunterPreviewCompanies.map(company => ({
+      ...company,
+      selected: company.importable ? checked : false
+    }));
+  }
+
+  selectAllHunterPreviewCompanies() {
+    this.hunterPreviewCompanies = this.hunterPreviewCompanies.map(company => ({
+      ...company,
+      selected: company.importable
+    }));
+  }
+
+  clearHunterPreviewSelection() {
+    this.hunterPreviewCompanies = this.hunterPreviewCompanies.map(company => ({
+      ...company,
+      selected: false
+    }));
+  }
+
+  importSingleHunterCompany(company: HunterPreviewCompany) {
+    this.importHunterCompanies([company]);
+  }
+
+  importSelectedHunterCompanies(mode: 'selected' | 'all' = 'selected') {
+    const companies = mode === 'all'
+      ? this.hunterPreviewCompanies.filter(company => company.importable)
+      : this.hunterPreviewCompanies.filter(company => company.importable && company.selected);
+
+    this.importHunterCompanies(companies);
+  }
+
+  private importHunterCompanies(companies: HunterPreviewCompany[]) {
+    const industry = this.effectiveHunterIndustry;
+
+    if (!industry || !this.hunterCity.trim()) {
+      this.error = 'Bitte Branche und Stadt eingeben';
+      return;
+    }
+
+    if (companies.length === 0) {
+      this.error = 'Bitte mindestens eine Firma auswählen';
       return;
     }
 
@@ -618,12 +892,16 @@ export class Admin implements OnInit {
     this.successMessage = '';
     this.hunterImportSummary = null;
 
+    const selectedIds = new Set(companies.map(company => company.id));
+    const payloadCompanies = companies.map(({ selected, ...company }) => company);
+
     this.http.post<{ success: boolean; message: string; summary: ProspectImportSummary }>(
       `${this.apiUrl}/hunter/import`,
       {
-        industry: this.hunterIndustry.trim(),
+        industry,
         city: this.hunterCity.trim(),
-        countryCode: this.hunterCountryCode.trim() || 'DE'
+        countryCode: this.hunterCountryCode.trim() || 'DE',
+        companies: payloadCompanies
       },
       this.getAuthOptions()
     ).subscribe({
@@ -631,11 +909,15 @@ export class Admin implements OnInit {
         this.hunterImportSummary = response.summary;
         this.successMessage = response.message;
         this.hunterImporting = false;
+        this.hunterPreviewCompanies = this.hunterPreviewCompanies.filter(company => !selectedIds.has(company.id));
+        if (this.hunterPreviewCompanies.length === 0) {
+          this.hunterPreviewSummary = null;
+        }
         this.loadProspectLeads('hunter');
         setTimeout(() => this.successMessage = '', 4000);
       },
       error: (err) => {
-        this.error = err.error?.message || 'Fehler beim Hunter-Import';
+        this.error = err.error?.message || 'Fehler beim Übernehmen der Firmen';
         this.hunterImporting = false;
         console.error(err);
       }
@@ -648,6 +930,14 @@ export class Admin implements OnInit {
 
   applyHunterFilters() {
     this.filteredHunterLeads = this.filterProspectLeads(this.hunterLeads, this.hunterSearchTerm);
+  }
+
+  openProspectDetails(lead: ProspectLead) {
+    this.selectedProspectLead = lead;
+  }
+
+  closeProspectDetails() {
+    this.selectedProspectLead = null;
   }
 
   private filterProspectLeads(leads: ProspectLead[], term: string) {
@@ -670,7 +960,18 @@ export class Admin implements OnInit {
 
   getProspectLeadsByStatus(source: ProspectSource, status: ProspectStatus) {
     const leads = source === 'google_places' ? this.filteredGoogleLeads : this.filteredHunterLeads;
+    if (status === 'neu') {
+      return leads.filter(lead => lead.status === 'neu' || lead.status === 'geprueft');
+    }
     return leads.filter(lead => lead.status === status);
+  }
+
+  getProspectListLeads(source: ProspectSource) {
+    return source === 'google_places' ? this.filteredGoogleLeads : this.filteredHunterLeads;
+  }
+
+  setProspectViewMode(mode: ProspectViewMode) {
+    this.prospectViewMode = mode;
   }
 
   getProspectDropListId(source: ProspectSource, status: ProspectStatus) {
@@ -693,6 +994,25 @@ export class Admin implements OnInit {
     this.updateProspectLead(lead, { status }, () => {
       lead.status = previousStatus;
       this.applyProspectFiltersForSource(source);
+    });
+  }
+
+  changeProspectStatus(lead: ProspectLead, status: string) {
+    if (!this.validProspectStatuses.includes(status as ProspectStatus)) {
+      return;
+    }
+
+    const nextStatus = status as ProspectStatus;
+    if (lead.status === nextStatus) {
+      return;
+    }
+
+    const previousStatus = lead.status;
+    lead.status = nextStatus;
+    this.applyProspectFiltersForSource(lead.source);
+    this.updateProspectLead(lead, { status: nextStatus }, () => {
+      lead.status = previousStatus;
+      this.applyProspectFiltersForSource(lead.source);
     });
   }
 
@@ -737,33 +1057,13 @@ export class Admin implements OnInit {
           this.hunterLeads = this.hunterLeads.filter(item => item._id !== lead._id);
           this.applyHunterFilters();
         }
+        if (this.selectedProspectLead?._id === lead._id) {
+          this.selectedProspectLead = null;
+        }
         setTimeout(() => this.successMessage = '', 3000);
       },
       error: (err) => {
         this.error = err.error?.message || 'Fehler beim Löschen';
-        console.error(err);
-      }
-    });
-  }
-
-  loadHunterEmails(lead: ProspectLead) {
-    this.loadingHunterEmailsId = lead._id;
-    this.error = '';
-
-    this.http.post<{ success: boolean; message: string; lead: ProspectLead }>(
-      `${this.apiUrl}/hunter/leads/${lead._id}/emails`,
-      {},
-      this.getAuthOptions()
-    ).subscribe({
-      next: (response) => {
-        this.replaceProspectLead(response.lead);
-        this.successMessage = response.message;
-        this.loadingHunterEmailsId = '';
-        setTimeout(() => this.successMessage = '', 3000);
-      },
-      error: (err) => {
-        this.error = err.error?.message || 'Fehler beim Laden der Hunter-E-Mails';
-        this.loadingHunterEmailsId = '';
         console.error(err);
       }
     });
@@ -777,6 +1077,9 @@ export class Admin implements OnInit {
     } else {
       target.unshift(updated);
     }
+    if (this.selectedProspectLead?._id === updated._id) {
+      this.selectedProspectLead = updated;
+    }
     this.applyProspectFiltersForSource(updated.source);
   }
 
@@ -789,6 +1092,9 @@ export class Admin implements OnInit {
   }
 
   getProspectStatusLabel(status: string) {
+    if (status === 'geprueft') {
+      return 'Neu';
+    }
     return this.prospectStatuses.find(item => item.id === status)?.label || status;
   }
 
@@ -822,6 +1128,37 @@ export class Admin implements OnInit {
     return lead.emails?.length || lead.metadata?.['emailsCount']?.total || 0;
   }
 
+  getProspectEmails(lead: ProspectLead | null) {
+    if (!lead) {
+      return [];
+    }
+    const emails = [...(lead.emails || [])];
+    if (lead.email && !emails.some(email => email.value === lead.email)) {
+      emails.unshift({ value: lead.email });
+    }
+    return emails.filter(email => email.value);
+  }
+
+  getProspectDetailRows(lead: ProspectLead | null) {
+    if (!lead) {
+      return [];
+    }
+
+    const rows = [
+      { label: 'Branche', value: lead.category || '' },
+      { label: 'Stadt', value: lead.city || '' },
+      { label: 'Adresse', value: lead.address || '' },
+      { label: 'Telefon', value: lead.phone || '' },
+      { label: 'Domain', value: lead.domain || '' },
+      { label: 'Status', value: this.getProspectStatusLabel(lead.status) },
+      { label: 'Distanz', value: lead.distanceMeters !== null && lead.distanceMeters !== undefined ? this.formatDistance(lead.distanceMeters) : '' },
+      { label: 'Radius', value: lead.source === 'google_places' ? this.formatDistance(this.googleRadiusMeters) : '' },
+      { label: 'Suchabfrage', value: lead.query || '' }
+    ];
+
+    return rows.filter(row => row.value);
+  }
+
   // ============================================
   // BLOG POST MANAGEMENT
   // ============================================
@@ -834,6 +1171,7 @@ export class Admin implements OnInit {
         next: (response) => {
           this.blogPosts = (response.posts || []).map(post => ({
             ...post,
+            fullContent: this.normalizeBlogSections(post.fullContent, post.content),
             imageUrl: this.toPublicUrl(post.image)
           }));
           this.applyBlogFilters();
@@ -875,7 +1213,7 @@ export class Admin implements OnInit {
       title: '',
       excerpt: '',
       content: '',
-      fullContent: [''],
+      fullContent: [this.createBlogSection()],
       image: '',
       category: '',
       metaTitle: '',
@@ -889,12 +1227,10 @@ export class Admin implements OnInit {
   }
 
   editBlogPost(post: BlogPost) {
-    const fullContent = Array.isArray(post.fullContent) && post.fullContent.length > 0
-      ? post.fullContent
-      : (post.content ? post.content.split(/\n\s*\n/).filter(p => p.trim()) : ['']);
+    const fullContent = this.normalizeBlogSections(post.fullContent, post.content);
 
     this.blogForm = { ...post, fullContent };
-    this.blogForm.content = (this.blogForm.content || fullContent.join('\n\n')).trim();
+    this.blogForm.content = (this.blogForm.content || fullContent.map(section => this.stripHtml(section.html)).join('\n\n')).trim();
     this.imagePreview = post.image ? this.toPublicUrl(post.image) : '';
     this.showBlogEditor = true;
   }
@@ -914,6 +1250,68 @@ export class Admin implements OnInit {
       };
       reader.readAsDataURL(file);
     }
+  }
+
+  onBlogSectionInput(index: number, event: Event) {
+    const target = event.target as HTMLElement;
+    if (!this.blogForm.fullContent[index]) {
+      return;
+    }
+    this.blogForm.fullContent[index].html = target.innerHTML;
+  }
+
+  formatBlogSection(command: string, value?: string) {
+    if (!isPlatformBrowser(this.platformId)) {
+      return;
+    }
+
+    document.execCommand(command, false, value);
+  }
+
+  onBlogSectionImageSelect(index: number, event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file || !this.blogForm.fullContent[index]) {
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('image', file);
+    this.loading = true;
+    this.error = '';
+
+    this.http.post<{ success: boolean; imageUrl: string }>(
+      `${this.apiUrl}/blog/upload-image`,
+      formData,
+      this.getAuthOptions()
+    ).subscribe({
+      next: (response) => {
+        const section = this.blogForm.fullContent[index];
+        section.image = response.imageUrl;
+        section.imageUrl = this.toPublicUrl(response.imageUrl);
+        if (!section.alt) {
+          section.alt = this.blogForm.title || 'Blog Bild';
+        }
+        this.loading = false;
+        input.value = '';
+      },
+      error: (err) => {
+        this.error = 'Fehler beim Abschnittsbild-Upload';
+        this.loading = false;
+        input.value = '';
+        console.error(err);
+      }
+    });
+  }
+
+  removeBlogSectionImage(index: number) {
+    const section = this.blogForm.fullContent[index];
+    if (!section) {
+      return;
+    }
+    section.image = '';
+    section.imageUrl = '';
+    section.alt = '';
   }
 
   saveBlogPost() {
@@ -1067,7 +1465,7 @@ export class Admin implements OnInit {
         const content = response.content;
         this.blogForm.title = content.title;
         this.blogForm.excerpt = content.excerpt;
-        this.blogForm.fullContent = content.paragraphs;
+        this.blogForm.fullContent = content.paragraphs.map(paragraph => this.createBlogSection(this.textToSectionHtml(paragraph)));
         this.blogForm.content = content.paragraphs.join('\n\n');
         this.blogForm.metaTitle = content.metaTitle;
         this.blogForm.metaDescription = content.metaDescription;
@@ -1092,11 +1490,14 @@ export class Admin implements OnInit {
     if (!this.blogForm.fullContent) {
       this.blogForm.fullContent = [];
     }
-    this.blogForm.fullContent.push('');
+    this.blogForm.fullContent.push(this.createBlogSection());
   }
 
   removeParagraph(index: number) {
     this.blogForm.fullContent.splice(index, 1);
+    if (this.blogForm.fullContent.length === 0) {
+      this.blogForm.fullContent.push(this.createBlogSection());
+    }
   }
 
   getPostStatusColor(status: string): string {

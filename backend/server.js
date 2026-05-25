@@ -104,9 +104,9 @@ if (googlePlacesApiKey) {
 }
 
 if (hunterApiKey) {
-  console.log('Hunter API konfiguriert');
+  console.log('Firmensuche konfiguriert');
 } else {
-  console.log('Hunter API nicht konfiguriert (nur fuer Hunter-Akquise benoetigt).');
+  console.log('Firmensuche nicht konfiguriert (nur fuer Firmen-Suche benoetigt).');
 }
 
 const jwtSecret = process.env.JWT_SECRET || '';
@@ -496,15 +496,15 @@ function buildSearchBounds(center, radiusMeters) {
 function getHunterErrorMessage(status, data) {
   const firstError = Array.isArray(data?.errors) ? data.errors[0] : null;
   if (firstError?.id === 'no_discover_access' || firstError?.details?.includes('Discover')) {
-    return 'Hunter Discover ist fuer diesen API-Key oder Tarif nicht freigeschaltet.';
+    return 'Die Firmen-Suche ist fuer diesen API-Key oder Tarif nicht freigeschaltet.';
   }
   if (status === 401) {
-    return 'Hunter API-Key ist ungueltig oder fehlt.';
+    return 'API-Key fuer die Firmen-Suche ist ungueltig oder fehlt.';
   }
   if (status === 403 || status === 429) {
-    return 'Hunter Limit erreicht oder Zugriff verweigert. Bitte Tarif und Limits pruefen.';
+    return 'Limit der Firmen-Suche erreicht oder Zugriff verweigert. Bitte Tarif und Limits pruefen.';
   }
-  return firstError?.details || data?.message || `Hunter API Fehler (${status})`;
+  return firstError?.details || data?.message || `Fehler bei der Firmen-Suche (${status})`;
 }
 
 
@@ -1096,9 +1096,10 @@ async function importGooglePlacesCategory(category) {
 async function upsertHunterProspectLead({ company, industry, city, countryCode, query }) {
   const now = new Date().toISOString();
   const domain = normalizeDomain(company.domain || '');
-  const companyName = company.organization || company.name || domain || 'Unbekannte Hunter-Firma';
+  const companyName = company.companyName || company.organization || company.name || domain || 'Unbekannte Firma';
+  const emailsCount = company.emails_count ?? company.emailsCount ?? null;
   const metadata = {
-    emailsCount: company.emails_count || null,
+    emailsCount,
     countryCode,
     sourceQuery: query
   };
@@ -1169,9 +1170,14 @@ function countryNameFromCode(countryCode = 'DE') {
   return names[normalized] || normalized;
 }
 
-async function importHunterCompanies({ industry, city, countryCode = 'DE' }) {
+function buildHunterDiscoveryContext({ industry, city, countryCode = 'DE' }) {
   const normalizedCountryCode = String(countryCode || 'DE').trim().toUpperCase();
   const query = `${industry} companies in ${city}, ${countryNameFromCode(normalizedCountryCode)}`;
+  return { normalizedCountryCode, query };
+}
+
+async function fetchHunterCompanies({ industry, city, countryCode = 'DE' }) {
+  const { normalizedCountryCode, query } = buildHunterDiscoveryContext({ industry, city, countryCode });
   const response = await fetch(`https://api.hunter.io/v2/discover?api_key=${encodeURIComponent(hunterApiKey)}`, {
     method: 'POST',
     headers: {
@@ -1188,32 +1194,115 @@ async function importHunterCompanies({ industry, city, countryCode = 'DE' }) {
   }
 
   const companies = Array.isArray(data?.data) ? data.data : [];
+  return {
+    query,
+    countryCode: normalizedCountryCode,
+    companies,
+    meta: data?.meta || {}
+  };
+}
+
+function mapHunterPreviewCompany(company, index, { industry, city, countryCode, query }) {
+  const domain = normalizeDomain(company?.domain || '');
+  const companyName = company?.organization || company?.name || domain || 'Unbekannte Firma';
+  const emailsCount = company?.emails_count ?? company?.emailsCount ?? null;
+
+  return {
+    id: `${domain || companyName.toLowerCase().replace(/[^a-z0-9]+/g, '-') || 'hunter'}-${index}`,
+    companyName,
+    organization: company?.organization || companyName,
+    name: company?.name || companyName,
+    domain,
+    website: domain ? `https://${domain}` : '',
+    emailsCount,
+    emails_count: emailsCount,
+    industry,
+    city,
+    countryCode,
+    query,
+    importable: Boolean(domain)
+  };
+}
+
+async function previewHunterCompanies({ industry, city, countryCode = 'DE' }) {
+  const search = await fetchHunterCompanies({ industry, city, countryCode });
+  const companies = search.companies.map((company, index) => mapHunterPreviewCompany(company, index, {
+    industry,
+    city,
+    countryCode: search.countryCode,
+    query: search.query
+  }));
+
+  return {
+    query: search.query,
+    fetched: companies.length,
+    importable: companies.filter(company => company.importable).length,
+    skippedWithoutDomain: companies.filter(company => !company.importable).length,
+    companies,
+    meta: search.meta
+  };
+}
+
+async function importHunterCompanies({ industry, city, countryCode = 'DE', companies }) {
+  const { normalizedCountryCode, query: fallbackQuery } = buildHunterDiscoveryContext({ industry, city, countryCode });
+  let sourceCompanies = Array.isArray(companies) ? companies : null;
+  let query = sourceCompanies?.find(company => company?.query)?.query || fallbackQuery;
+  let meta = {};
+
+  if (!sourceCompanies) {
+    const search = await fetchHunterCompanies({ industry, city, countryCode });
+    sourceCompanies = search.companies;
+    query = search.query;
+    meta = search.meta;
+  }
+
   const imported = [];
   let skippedWithoutDomain = 0;
+  let emailLookups = 0;
+  let emailsLoaded = 0;
+  let emailLookupFailed = 0;
 
-  for (const company of companies) {
+  for (const company of sourceCompanies) {
     if (!normalizeDomain(company?.domain || '')) {
       skippedWithoutDomain += 1;
       continue;
     }
-    imported.push(await upsertHunterProspectLead({
+    const importedItem = await upsertHunterProspectLead({
       company,
-      industry,
-      city,
-      countryCode: normalizedCountryCode,
-      query
-    }));
+      industry: company.industry || industry,
+      city: company.city || city,
+      countryCode: company.countryCode || normalizedCountryCode,
+      query: company.query || query
+    });
+
+    emailLookups += 1;
+    try {
+      const leadWithEmails = await updateHunterLeadEmailsById(
+        importedItem.lead._id,
+        importedItem.lead.domain || importedItem.lead.website || company.domain
+      );
+      emailsLoaded += getLeadEmailCount(leadWithEmails);
+      importedItem.lead = leadWithEmails;
+    } catch (error) {
+      emailLookupFailed += 1;
+      console.error('Fehler beim automatischen Laden der Firmen-E-Mails:', error);
+    }
+
+    imported.push(importedItem);
   }
 
   return {
     query,
-    fetched: companies.length,
+    fetched: sourceCompanies.length,
     imported: imported.length,
     created: imported.filter(item => item.inserted).length,
     updated: imported.filter(item => !item.inserted).length,
     skippedWithoutDomain,
+    emailLookups,
+    emailsLoaded,
+    emailLookupFailed,
     leads: imported.map(item => item.lead),
-    meta: data?.meta || {}
+    meta
   };
 }
 
@@ -1240,7 +1329,83 @@ function pickPrimaryEmail(emails) {
   return candidates[0]?.value || '';
 }
 
-// GET - Prospect leads for Google Places / Hunter Kanban
+function getLeadEmailCount(lead) {
+  if (!lead) {
+    return 0;
+  }
+  return (lead.emails || []).filter(email => email?.value).length || (lead.email ? 1 : 0);
+}
+
+async function fetchHunterDomainEmails(domain) {
+  const normalizedDomain = normalizeDomain(domain || '');
+  if (!normalizedDomain) {
+    throw new Error('Dieser Firmen-Lead hat keine Domain');
+  }
+
+  const url = new URL('https://api.hunter.io/v2/domain-search');
+  url.searchParams.set('domain', normalizedDomain);
+  url.searchParams.set('limit', '10');
+  url.searchParams.set('api_key', hunterApiKey);
+
+  const response = await fetch(url.toString());
+  const data = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new Error(getHunterErrorMessage(response.status, data));
+  }
+
+  const emails = (data?.data?.emails || []).map(mapHunterEmail).filter(email => email.value);
+  const primaryEmail = pickPrimaryEmail(emails);
+  const now = new Date().toISOString();
+  const metadataUpdate = {
+    hunterDomainSearch: {
+      domain: normalizedDomain,
+      organization: data?.data?.organization || '',
+      pattern: data?.data?.pattern || '',
+      emailsFound: emails.length,
+      checkedAt: now
+    }
+  };
+
+  return {
+    domain: normalizedDomain,
+    emails,
+    primaryEmail,
+    metadataUpdate,
+    rawData: data,
+    checkedAt: now
+  };
+}
+
+async function updateHunterLeadEmailsById(leadId, domain) {
+  const emailData = await fetchHunterDomainEmails(domain);
+
+  const updated = await dbQuery(
+    `UPDATE prospect_leads
+     SET emails = $1,
+         email = $2,
+         domain = $3,
+         website = COALESCE(NULLIF(website, ''), $4),
+         metadata = metadata || $5::jsonb,
+         raw_data = $6::jsonb,
+         updated_at = $7
+     WHERE id = $8
+     RETURNING *`,
+    [
+      JSON.stringify(emailData.emails),
+      emailData.primaryEmail,
+      emailData.domain,
+      `https://${emailData.domain}`,
+      JSON.stringify(emailData.metadataUpdate),
+      JSON.stringify(emailData.rawData),
+      emailData.checkedAt,
+      leadId
+    ]
+  );
+
+  return mapProspectLeadRow(updated.rows[0]);
+}
+
+// GET - Prospect leads for Google Places / company search Kanban
 app.get('/api/prospect-leads', requireAdmin, async (req, res) => {
   try {
     const source = req.query.source ? String(req.query.source) : null;
@@ -1383,7 +1548,7 @@ app.post('/api/google-places/import', requireAdmin, async (req, res) => {
   }
 });
 
-app.post('/api/hunter/import', requireAdmin, async (req, res) => {
+app.post('/api/hunter/preview', requireAdmin, async (req, res) => {
   try {
     const { industry, city, countryCode = 'DE' } = req.body || {};
     if (!industry || !city) {
@@ -1396,21 +1561,57 @@ app.post('/api/hunter/import', requireAdmin, async (req, res) => {
     if (!hunterApiKey) {
       return res.status(503).json({
         success: false,
-        message: 'Hunter API ist nicht konfiguriert. Bitte HUNTER_API_KEY setzen.'
+        message: 'Firmensuche ist nicht konfiguriert. Bitte HUNTER_API_KEY setzen.'
       });
     }
 
-    const summary = await importHunterCompanies({ industry, city, countryCode });
+    const summary = await previewHunterCompanies({ industry, city, countryCode });
     return res.json({
       success: true,
-      message: `${summary.imported} Hunter-Firmen importiert`,
+      message: `${summary.importable} Firmen mit Domain gefunden`,
+      summary,
+      companies: summary.companies
+    });
+  } catch (error) {
+    console.error('Fehler bei der Firmen-Vorschau:', error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: 'Fehler bei der Firmensuche: ' + error.message
+    });
+  }
+});
+
+app.post('/api/hunter/import', requireAdmin, async (req, res) => {
+  try {
+    const { industry, city, countryCode = 'DE', companies } = req.body || {};
+    if (!industry || !city) {
+      return res.status(400).json({
+        success: false,
+        message: 'Branche und Stadt sind erforderlich'
+      });
+    }
+
+    if (!hunterApiKey) {
+      return res.status(503).json({
+        success: false,
+        message: 'Firmensuche ist nicht konfiguriert. Bitte HUNTER_API_KEY setzen.'
+      });
+    }
+
+    const summary = await importHunterCompanies({ industry, city, countryCode, companies });
+    const failedSuffix = summary.emailLookupFailed
+      ? `, ${summary.emailLookupFailed} E-Mail-Abfragen fehlgeschlagen`
+      : '';
+    return res.json({
+      success: true,
+      message: `${summary.imported} Firmen übernommen, ${summary.emailsLoaded} E-Mail-Adressen geladen${failedSuffix}`,
       summary
     });
   } catch (error) {
-    console.error('Fehler beim Hunter-Import:', error);
+    console.error('Fehler beim Firmen-Import:', error);
     return res.status(error.statusCode || 500).json({
       success: false,
-      message: 'Fehler beim Hunter-Import: ' + error.message
+      message: 'Fehler beim Firmen-Import: ' + error.message
     });
   }
 });
@@ -1420,7 +1621,7 @@ app.post('/api/hunter/leads/:id/emails', requireAdmin, async (req, res) => {
     if (!hunterApiKey) {
       return res.status(503).json({
         success: false,
-        message: 'Hunter API ist nicht konfiguriert. Bitte HUNTER_API_KEY setzen.'
+        message: 'Firmensuche ist nicht konfiguriert. Bitte HUNTER_API_KEY setzen.'
       });
     }
 
@@ -1432,7 +1633,7 @@ app.post('/api/hunter/leads/:id/emails', requireAdmin, async (req, res) => {
     if (!lead) {
       return res.status(404).json({
         success: false,
-        message: 'Hunter-Lead nicht gefunden'
+        message: 'Firmen-Lead nicht gefunden'
       });
     }
 
@@ -1440,67 +1641,22 @@ app.post('/api/hunter/leads/:id/emails', requireAdmin, async (req, res) => {
     if (!domain) {
       return res.status(400).json({
         success: false,
-        message: 'Dieser Hunter-Lead hat keine Domain'
+        message: 'Dieser Firmen-Lead hat keine Domain'
       });
     }
 
-    const url = new URL('https://api.hunter.io/v2/domain-search');
-    url.searchParams.set('domain', domain);
-    url.searchParams.set('limit', '10');
-    url.searchParams.set('api_key', hunterApiKey);
-
-    const response = await fetch(url.toString());
-    const data = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(getHunterErrorMessage(response.status, data));
-    }
-
-    const emails = (data?.data?.emails || []).map(mapHunterEmail).filter(email => email.value);
-    const primaryEmail = pickPrimaryEmail(emails);
-    const now = new Date().toISOString();
-    const metadataUpdate = {
-      hunterDomainSearch: {
-        domain,
-        organization: data?.data?.organization || '',
-        pattern: data?.data?.pattern || '',
-        emailsFound: emails.length,
-        checkedAt: now
-      }
-    };
-
-    const updated = await dbQuery(
-      `UPDATE prospect_leads
-       SET emails = $1,
-           email = $2,
-           domain = $3,
-           website = COALESCE(NULLIF(website, ''), $4),
-           metadata = metadata || $5::jsonb,
-           raw_data = $6::jsonb,
-           updated_at = $7
-       WHERE id = $8
-       RETURNING *`,
-      [
-        JSON.stringify(emails),
-        primaryEmail,
-        domain,
-        `https://${domain}`,
-        JSON.stringify(metadataUpdate),
-        JSON.stringify(data),
-        now,
-        req.params.id
-      ]
-    );
+    const leadWithEmails = await updateHunterLeadEmailsById(req.params.id, domain);
 
     return res.json({
       success: true,
-      message: `${emails.length} E-Mail-Adressen geladen`,
-      lead: mapProspectLeadRow(updated.rows[0])
+      message: `${getLeadEmailCount(leadWithEmails)} E-Mail-Adressen geladen`,
+      lead: leadWithEmails
     });
   } catch (error) {
-    console.error('Fehler beim Laden der Hunter-E-Mails:', error);
+    console.error('Fehler beim Laden der Firmen-E-Mails:', error);
     return res.status(500).json({
       success: false,
-      message: 'Fehler beim Laden der Hunter-E-Mails: ' + error.message
+      message: 'Fehler beim Laden der Firmen-E-Mails: ' + error.message
     });
   }
 });

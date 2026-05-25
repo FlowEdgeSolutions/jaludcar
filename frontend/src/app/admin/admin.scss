@@ -620,7 +620,7 @@ $primary-color: #1a1a1a;
 // ============================================
 
 .prospect-tab {
-  max-width: 1600px;
+  max-width: 1900px;
   margin: 0 auto;
 }
 
@@ -637,7 +637,7 @@ $primary-color: #1a1a1a;
     align-items: end;
 
     &.hunter-control-grid {
-      grid-template-columns: minmax(180px, 1fr) minmax(150px, 0.8fr) 90px minmax(180px, 1fr) auto auto;
+      grid-template-columns: minmax(220px, 1fr) minmax(170px, 0.8fr) 90px minmax(220px, 1fr) auto auto auto;
     }
   }
 
@@ -664,6 +664,12 @@ $primary-color: #1a1a1a;
     text-transform: uppercase;
   }
 
+  .hunter-industry-group {
+    .hunter-custom-industry {
+      margin-top: 0.6rem;
+    }
+  }
+
   .btn-primary-action,
   .refresh-btn {
     min-height: 48px;
@@ -676,6 +682,29 @@ $primary-color: #1a1a1a;
     &:disabled {
       opacity: 0.55;
       cursor: not-allowed;
+    }
+  }
+
+  .view-toggle {
+    display: inline-flex;
+    min-height: 48px;
+
+    button {
+      padding: 0.8rem 1rem;
+      border: 2px solid #000000;
+      background: #ffffff;
+      color: #000000;
+      font-weight: 700;
+      cursor: pointer;
+
+      & + button {
+        border-left: 0;
+      }
+
+      &.active {
+        background: #000000;
+        color: #ffffff;
+      }
     }
   }
 
@@ -713,15 +742,245 @@ $primary-color: #1a1a1a;
     color: #111827;
     font-weight: 600;
   }
+
+  .hunter-search-status {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    margin-top: 1rem;
+    padding: 0.9rem 1rem;
+    border: 2px solid #000000;
+    background: #f9fafb;
+
+    p {
+      margin: 0.25rem 0 0;
+      color: #555555;
+    }
+
+    .spinner.small {
+      width: 28px;
+      height: 28px;
+      border: 3px solid #e5e7eb;
+      border-top-color: #000000;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      flex: 0 0 auto;
+    }
+  }
+}
+
+.hunter-preview {
+  background: #ffffff;
+  border: 2px solid #000000;
+  padding: 1.25rem;
+  margin-bottom: 1.5rem;
+
+  .hunter-preview-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+
+    h2 {
+      margin: 0;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.4rem;
+    }
+
+    p {
+      margin: 0.35rem 0 0;
+      color: #555555;
+      font-weight: 600;
+    }
+  }
+
+  .hunter-preview-actions {
+    display: flex;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+  }
+
+  .hunter-preview-query {
+    margin-top: 1rem;
+    padding: 0.75rem;
+    border: 2px solid #d1d5db;
+    background: #f9fafb;
+    color: #374151;
+    font-size: 0.95rem;
+  }
+
+  .hunter-preview-table {
+    margin-top: 1rem;
+    overflow-x: auto;
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      padding: 0.8rem;
+      border-bottom: 1px solid #e5e7eb;
+      text-align: left;
+      vertical-align: middle;
+    }
+
+    th {
+      border-bottom: 2px solid #000000;
+      background: #f9fafb;
+      font-weight: 700;
+    }
+
+    a {
+      color: #000000;
+      font-weight: 600;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+
+    .not-importable {
+      color: #6b7280;
+      background: #f9fafb;
+    }
+  }
+
+  .btn-primary-action,
+  .refresh-btn,
+  .btn-small-save {
+    min-height: 40px;
+    padding: 0.55rem 0.9rem;
+    border: 2px solid #000000;
+    font-weight: 600;
+    cursor: pointer;
+
+    &:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+  }
+
+  .btn-primary-action,
+  .btn-small-save {
+    background: #000000;
+    color: #ffffff;
+
+    &:hover:not(:disabled) {
+      background: #ffffff;
+      color: #000000;
+    }
+  }
+
+  .refresh-btn {
+    background: #ffffff;
+    color: #000000;
+
+    &:hover:not(:disabled) {
+      background: #000000;
+      color: #ffffff;
+    }
+  }
 }
 
 .kanban-board {
   display: grid;
-  grid-template-columns: repeat(6, minmax(260px, 1fr));
+  grid-template-columns: repeat(5, minmax(360px, 1fr));
   gap: 1rem;
   align-items: start;
   overflow-x: auto;
   padding-bottom: 0.75rem;
+}
+
+.prospect-list-section {
+  background: #ffffff;
+  border: 2px solid #000000;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.prospect-list-table {
+  overflow-x: auto;
+
+  table {
+    width: 100%;
+    min-width: 980px;
+    border-collapse: collapse;
+  }
+
+  th,
+  td {
+    padding: 0.9rem;
+    border-bottom: 1px solid #e5e7eb;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  th {
+    border-bottom: 2px solid #000000;
+    background: #f9fafb;
+    font-weight: 800;
+  }
+
+  tr {
+    cursor: pointer;
+
+    &:hover {
+      background: #f9fafb;
+    }
+  }
+
+  td {
+    strong,
+    span,
+    a {
+      display: block;
+      overflow-wrap: anywhere;
+    }
+
+    span {
+      margin-top: 0.25rem;
+      color: #6b7280;
+      font-size: 0.9rem;
+    }
+
+    a {
+      color: #000000;
+      font-weight: 700;
+      text-decoration: none;
+
+      &:hover {
+        text-decoration: underline;
+      }
+    }
+  }
+
+  select {
+    width: 100%;
+    min-width: 140px;
+    padding: 0.55rem;
+    border: 2px solid #000000;
+    background: #ffffff;
+    font-weight: 700;
+  }
+
+  .btn-small-save {
+    min-height: 36px;
+    padding: 0.5rem 0.75rem;
+    border: 2px solid #000000;
+    background: #000000;
+    color: #ffffff;
+    font-weight: 700;
+    cursor: pointer;
+
+    &:hover {
+      background: #ffffff;
+      color: #000000;
+    }
+  }
 }
 
 .kanban-column {
@@ -757,6 +1016,12 @@ $primary-color: #1a1a1a;
   padding: 1rem;
   margin-bottom: 0.9rem;
   cursor: grab;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+
+  &:hover {
+    border-color: #4b5563;
+    transform: translateY(-1px);
+  }
 
   &:active {
     cursor: grabbing;
@@ -792,6 +1057,14 @@ $primary-color: #1a1a1a;
   .prospect-category {
     color: #111827;
     font-weight: 700;
+  }
+
+  .prospect-open-hint {
+    margin: 0.75rem 0 0;
+    color: #6b7280;
+    font-size: 0.82rem;
+    font-weight: 700;
+    text-transform: uppercase;
   }
 
   .prospect-links {
@@ -872,6 +1145,162 @@ $primary-color: #1a1a1a;
   background: #ffffff;
 }
 
+.prospect-detail-modal {
+  max-width: 840px;
+
+  .modal-header {
+    align-items: flex-start;
+
+    p {
+      margin: 0.35rem 0 0;
+      color: #666666;
+      font-weight: 600;
+    }
+  }
+
+  .prospect-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.8rem;
+  }
+
+  .prospect-detail-row {
+    border: 2px solid #e5e7eb;
+    padding: 0.85rem;
+    background: #f9fafb;
+
+    span {
+      display: block;
+      margin-bottom: 0.35rem;
+      color: #6b7280;
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    strong {
+      display: block;
+      color: #111827;
+      overflow-wrap: anywhere;
+    }
+  }
+
+  .prospect-detail-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-top: 1rem;
+
+    a {
+      min-height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0.55rem 0.9rem;
+      border: 2px solid #000000;
+      color: #000000;
+      background: #ffffff;
+      font-weight: 700;
+      text-decoration: none;
+
+      &:hover {
+        background: #000000;
+        color: #ffffff;
+      }
+    }
+  }
+
+  .prospect-detail-section {
+    margin-top: 1.4rem;
+    padding-top: 1.2rem;
+    border-top: 2px solid #e5e7eb;
+
+    h3 {
+      margin: 0 0 0.8rem;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 1.2rem;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 0.8rem;
+      border: 2px solid #000000;
+      font-family: inherit;
+      resize: vertical;
+    }
+
+    .btn-small-save {
+      margin-top: 0.7rem;
+      padding: 0.65rem 1rem;
+      border: 2px solid #000000;
+      background: #000000;
+      color: #ffffff;
+      font-weight: 700;
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        background: #ffffff;
+        color: #000000;
+      }
+
+      &:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+    }
+  }
+
+  .prospect-detail-section-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    align-items: center;
+    margin-bottom: 0.8rem;
+
+    h3 {
+      margin: 0;
+    }
+
+    .btn-small-save {
+      margin-top: 0;
+    }
+  }
+
+  .prospect-email-list {
+    display: grid;
+    gap: 0.65rem;
+  }
+
+  .prospect-email-item {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    padding: 0.75rem;
+    border: 2px solid #e5e7eb;
+    background: #ffffff;
+
+    a {
+      color: #000000;
+      font-weight: 700;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+
+    span {
+      padding: 0.2rem 0.45rem;
+      background: #f3f4f6;
+      color: #374151;
+      font-size: 0.82rem;
+      font-weight: 700;
+    }
+  }
+
+  .prospect-empty-detail {
+    margin: 0;
+    color: #6b7280;
+  }
+}
+
 .cdk-drag-preview {
   box-sizing: border-box;
   border: 2px solid #000000;
@@ -904,7 +1333,13 @@ $primary-color: #1a1a1a;
   }
 
   .kanban-board {
-    grid-template-columns: repeat(6, minmax(240px, 82vw));
+    grid-template-columns: repeat(5, minmax(300px, 86vw));
+  }
+
+  .prospect-detail-modal {
+    .prospect-detail-grid {
+      grid-template-columns: 1fr;
+    }
   }
 }
 
@@ -1319,6 +1754,104 @@ $primary-color: #1a1a1a;
             
             &:hover {
               background: #dc2626;
+            }
+          }
+        }
+
+        .rich-toolbar {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 0.4rem;
+          margin-bottom: 0.7rem;
+
+          button {
+            min-width: 40px;
+            min-height: 36px;
+            padding: 0.45rem 0.65rem;
+            border: 2px solid #000000;
+            background: #ffffff;
+            color: #000000;
+            font-weight: 800;
+            cursor: pointer;
+
+            &:hover {
+              background: #000000;
+              color: #ffffff;
+            }
+          }
+        }
+
+        .rich-editor {
+          min-height: 150px;
+          padding: 0.9rem;
+          border: 2px solid #000000;
+          background: #ffffff;
+          line-height: 1.7;
+
+          &:focus {
+            outline: none;
+            border-color: #666666;
+          }
+
+          &:empty::before {
+            content: attr(data-placeholder);
+            color: #9ca3af;
+          }
+
+          h2,
+          h3,
+          p,
+          ul,
+          ol {
+            margin: 0 0 0.85rem;
+          }
+
+          ul,
+          ol {
+            padding-left: 1.5rem;
+          }
+        }
+
+        .section-image-tools {
+          margin-top: 1rem;
+          padding-top: 1rem;
+          border-top: 2px solid #e5e7eb;
+
+          input[type='file'] {
+            padding: 0.65rem;
+          }
+
+          input[type='text'] {
+            margin-top: 0.7rem;
+          }
+        }
+
+        .section-image-preview {
+          margin-top: 0.9rem;
+          display: grid;
+          grid-template-columns: minmax(180px, 280px) auto;
+          gap: 1rem;
+          align-items: start;
+
+          img {
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            object-fit: cover;
+            border: 2px solid #000000;
+          }
+
+          .btn-remove {
+            width: fit-content;
+            padding: 0.55rem 0.8rem;
+            background: #ef4444;
+            color: #ffffff;
+            border: 2px solid #ef4444;
+            font-weight: 700;
+            cursor: pointer;
+
+            &:hover {
+              background: #ffffff;
+              color: #ef4444;
             }
           }
         }

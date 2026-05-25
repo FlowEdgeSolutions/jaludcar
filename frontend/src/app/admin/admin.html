@@ -49,7 +49,7 @@
       class="tab-btn"
       [class.active]="activeTab === 'hunter'"
       (click)="switchTab('hunter')">
-      Hunter
+      Firmen-Suche
     </button>
     <button 
       class="tab-btn" 
@@ -281,14 +281,18 @@
         <button class="refresh-btn" (click)="loadProspectLeads('google_places')" [disabled]="googleLoading">
           Aktualisieren
         </button>
+        <div class="view-toggle">
+          <button type="button" [class.active]="prospectViewMode === 'kanban'" (click)="setProspectViewMode('kanban')">Kanban</button>
+          <button type="button" [class.active]="prospectViewMode === 'list'" (click)="setProspectViewMode('list')">Liste</button>
+        </div>
       </div>
-      <p class="prospect-context">Radius: 15 km um Auf dem Haidchen 45, 45527 Hattingen</p>
+      <p class="prospect-context">Radius: {{ formatDistance(googleRadiusMeters) }} um {{ googleCenterAddress }}</p>
       <div class="import-summary" *ngIf="googleImportSummary">
         {{ googleImportSummary.imported }} importiert,
         {{ googleImportSummary.created }} neu,
         {{ googleImportSummary.updated }} aktualisiert
         <span *ngIf="googleImportSummary.skippedOutsideRadius">
-          , {{ googleImportSummary.skippedOutsideRadius }} außerhalb 15 km übersprungen
+          , {{ googleImportSummary.skippedOutsideRadius }} außerhalb {{ formatDistance(googleRadiusMeters) }} übersprungen
         </span>
       </div>
     </section>
@@ -298,7 +302,49 @@
       <p>Lade Google-Places-Leads...</p>
     </div>
 
-    <section class="kanban-board" *ngIf="!googleLoading || googleImporting">
+    <section class="prospect-list-section" *ngIf="prospectViewMode === 'list' && (!googleLoading || googleImporting)">
+      <div class="prospect-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Firma</th>
+              <th>Branche</th>
+              <th>Kontakt</th>
+              <th>Ort</th>
+              <th>Distanz</th>
+              <th>Status</th>
+              <th>Aktion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let prospect of getProspectListLeads('google_places')" (click)="openProspectDetails(prospect)">
+              <td>
+                <strong>{{ prospect.companyName }}</strong>
+                <span *ngIf="prospect.address">{{ prospect.address }}</span>
+              </td>
+              <td>{{ prospect.category || '-' }}</td>
+              <td>
+                <a *ngIf="prospect.phone" [href]="'tel:' + prospect.phone" (click)="$event.stopPropagation()">{{ prospect.phone }}</a>
+                <a *ngIf="prospect.website" [href]="prospect.website" target="_blank" rel="noopener" (click)="$event.stopPropagation()">Website</a>
+              </td>
+              <td>{{ prospect.city || '-' }}</td>
+              <td>{{ prospect.distanceMeters !== null && prospect.distanceMeters !== undefined ? formatDistance(prospect.distanceMeters) : '-' }}</td>
+              <td>
+                <select [ngModel]="prospect.status" (ngModelChange)="changeProspectStatus(prospect, $event)" (click)="$event.stopPropagation()">
+                  <option *ngFor="let option of prospectStatuses" [value]="option.id">{{ option.label }}</option>
+                </select>
+              </td>
+              <td>
+                <button type="button" class="btn-small-save" (click)="$event.stopPropagation(); openProspectDetails(prospect)">Details</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="kanban-empty" *ngIf="getProspectListLeads('google_places').length === 0">Keine Einträge</div>
+      </div>
+    </section>
+
+    <section class="kanban-board" *ngIf="prospectViewMode === 'kanban' && (!googleLoading || googleImporting)">
       <div
         class="kanban-column"
         *ngFor="let status of prospectStatuses"
@@ -316,10 +362,11 @@
           class="prospect-card"
           *ngFor="let prospect of getProspectLeadsByStatus('google_places', status.id)"
           cdkDrag
-          [cdkDragData]="prospect">
+          [cdkDragData]="prospect"
+          (click)="openProspectDetails(prospect)">
           <div class="prospect-card-header">
             <h3>{{ prospect.companyName }}</h3>
-            <button class="btn-icon-danger" (click)="deleteProspectLead(prospect)" title="Löschen">×</button>
+            <button class="btn-icon-danger" (click)="$event.stopPropagation(); deleteProspectLead(prospect)" title="Löschen">×</button>
           </div>
           <p class="prospect-category">{{ prospect.category }}</p>
           <p class="prospect-meta" *ngIf="prospect.distanceMeters !== null && prospect.distanceMeters !== undefined">
@@ -327,15 +374,17 @@
           </p>
           <p class="prospect-address" *ngIf="prospect.address">{{ prospect.address }}</p>
           <div class="prospect-links">
-            <a *ngIf="prospect.phone" [href]="'tel:' + prospect.phone">{{ prospect.phone }}</a>
-            <a *ngIf="prospect.website" [href]="prospect.website" target="_blank" rel="noopener">Website</a>
-            <a *ngIf="prospect.metadata?.['googleMapsUri']" [href]="prospect.metadata?.['googleMapsUri']" target="_blank" rel="noopener">Maps</a>
+            <a *ngIf="prospect.phone" [href]="'tel:' + prospect.phone" (click)="$event.stopPropagation()">{{ prospect.phone }}</a>
+            <a *ngIf="prospect.website" [href]="prospect.website" target="_blank" rel="noopener" (click)="$event.stopPropagation()">Website</a>
+            <a *ngIf="prospect.metadata?.['googleMapsUri']" [href]="prospect.metadata?.['googleMapsUri']" target="_blank" rel="noopener" (click)="$event.stopPropagation()">Maps</a>
           </div>
+          <p class="prospect-open-hint">Details öffnen</p>
           <textarea
             [(ngModel)]="prospect.notes"
             rows="3"
-            placeholder="Notiz..."></textarea>
-          <button class="btn-small-save" (click)="saveProspectNotes(prospect)">Notiz speichern</button>
+            placeholder="Notiz..."
+            (click)="$event.stopPropagation()"></textarea>
+          <button class="btn-small-save" (click)="$event.stopPropagation(); saveProspectNotes(prospect)">Notiz speichern</button>
         </div>
 
         <div class="kanban-empty" *ngIf="getProspectLeadsByStatus('google_places', status.id).length === 0">
@@ -350,12 +399,19 @@
   <div *ngIf="activeTab === 'hunter'" class="prospect-tab">
     <section class="prospect-controls">
       <div class="prospect-control-grid hunter-control-grid">
-        <div class="filter-group">
+        <div class="filter-group hunter-industry-group">
           <label>Branche:</label>
+          <select [(ngModel)]="hunterIndustry">
+            <option value="" disabled>Branche auswählen</option>
+            <option *ngFor="let category of googleCategories" [value]="category">{{ category }}</option>
+            <option [value]="customHunterIndustryOption">Eigene Branche</option>
+          </select>
           <input
+            *ngIf="isCustomHunterIndustry"
+            class="hunter-custom-industry"
             type="text"
-            [(ngModel)]="hunterIndustry"
-            placeholder="z.B. Pflegedienste">
+            [(ngModel)]="hunterCustomIndustry"
+            placeholder="Eigene Branche eingeben">
         </div>
         <div class="filter-group">
           <label>Stadt:</label>
@@ -380,29 +436,170 @@
             (input)="applyHunterFilters()"
             placeholder="Firma, Domain, E-Mail...">
         </div>
-        <button class="btn-primary-action" (click)="importHunterCompanies()" [disabled]="hunterImporting || !hunterIndustry || !hunterCity">
-          {{ hunterImporting ? 'Suche läuft...' : 'Hunter suchen' }}
+        <button class="btn-primary-action" (click)="searchHunterCompanies()" [disabled]="hunterSearching || hunterImporting || !effectiveHunterIndustry || !hunterCity">
+          {{ hunterSearching ? 'Suche läuft...' : 'Firmen suchen' }}
         </button>
-        <button class="refresh-btn" (click)="loadProspectLeads('hunter')" [disabled]="hunterLoading">
+        <button class="refresh-btn" (click)="loadProspectLeads('hunter')" [disabled]="hunterLoading || hunterSearching || hunterImporting">
           Aktualisieren
         </button>
+        <div class="view-toggle">
+          <button type="button" [class.active]="prospectViewMode === 'kanban'" (click)="setProspectViewMode('kanban')">Kanban</button>
+          <button type="button" [class.active]="prospectViewMode === 'list'" (click)="setProspectViewMode('list')">Liste</button>
+        </div>
+      </div>
+      <div class="hunter-search-status" *ngIf="hunterSearching">
+        <div class="spinner small"></div>
+        <div>
+          <strong>Firmensuche läuft</strong>
+          <p>Geschätzte Dauer: {{ hunterSearchEtaLabel }} · bisher {{ hunterSearchElapsedSeconds }}s</p>
+        </div>
       </div>
       <div class="import-summary" *ngIf="hunterImportSummary">
         {{ hunterImportSummary.imported }} importiert,
         {{ hunterImportSummary.created }} neu,
         {{ hunterImportSummary.updated }} aktualisiert
+        <span *ngIf="hunterImportSummary.emailsLoaded !== undefined">
+          , {{ hunterImportSummary.emailsLoaded }} E-Mail-Adressen geladen
+        </span>
+        <span *ngIf="hunterImportSummary.emailLookupFailed">
+          , {{ hunterImportSummary.emailLookupFailed }} E-Mail-Abfragen fehlgeschlagen
+        </span>
         <span *ngIf="hunterImportSummary.skippedWithoutDomain">
           , {{ hunterImportSummary.skippedWithoutDomain }} ohne Domain übersprungen
         </span>
       </div>
     </section>
 
+    <section class="hunter-preview" *ngIf="hunterPreviewSummary">
+      <div class="hunter-preview-header">
+        <div>
+          <h2>Firmen-Ergebnisse</h2>
+          <p>
+            {{ hunterPreviewSummary.fetched }} gefunden,
+            {{ hunterPreviewSummary.importable }} mit Domain,
+            {{ hunterPreviewSummary.skippedWithoutDomain }} ohne Domain
+          </p>
+        </div>
+        <div class="hunter-preview-actions" *ngIf="hunterPreviewCompanies.length > 0">
+          <button type="button" class="refresh-btn" (click)="selectAllHunterPreviewCompanies()" [disabled]="hunterImporting || importableHunterPreviewCount === 0">
+            Alle auswählen
+          </button>
+          <button type="button" class="refresh-btn" (click)="clearHunterPreviewSelection()" [disabled]="hunterImporting || selectedHunterPreviewCount === 0">
+            Auswahl aufheben
+          </button>
+          <button type="button" class="btn-primary-action" (click)="importSelectedHunterCompanies('all')" [disabled]="hunterImporting || importableHunterPreviewCount === 0">
+            Alle übernehmen
+          </button>
+          <button type="button" class="btn-primary-action" (click)="importSelectedHunterCompanies()" [disabled]="hunterImporting || selectedHunterPreviewCount === 0">
+            {{ hunterImporting ? 'Übernehme...' : selectedHunterPreviewCount + ' übernehmen' }}
+          </button>
+        </div>
+      </div>
+
+      <div class="hunter-preview-query" *ngIf="hunterPreviewSummary.query">
+        {{ hunterPreviewSummary.query }}
+      </div>
+
+      <div class="hunter-preview-table" *ngIf="hunterPreviewCompanies.length > 0; else noHunterPreviewResults">
+        <table>
+          <thead>
+            <tr>
+              <th>
+                <input
+                  type="checkbox"
+                  [checked]="areAllHunterPreviewCompaniesSelected"
+                  [disabled]="hunterImporting || importableHunterPreviewCount === 0"
+                  (change)="toggleAllHunterPreviewCompanies($event)">
+              </th>
+              <th>Firma</th>
+              <th>Domain</th>
+              <th>E-Mails</th>
+              <th>Status</th>
+              <th>Aktion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let company of hunterPreviewCompanies" [class.not-importable]="!company.importable">
+              <td>
+                <input
+                  type="checkbox"
+                  [(ngModel)]="company.selected"
+                  [disabled]="hunterImporting || !company.importable">
+              </td>
+              <td>{{ company.companyName }}</td>
+              <td>
+                <a *ngIf="company.domain" [href]="company.website" target="_blank" rel="noopener">{{ company.domain }}</a>
+                <span *ngIf="!company.domain">Keine Domain</span>
+              </td>
+              <td>{{ company.emailsCount || 0 }}</td>
+              <td>{{ company.importable ? 'Bereit' : 'Ohne Domain' }}</td>
+              <td>
+                <button
+                  type="button"
+                  class="btn-small-save"
+                  (click)="importSingleHunterCompany(company)"
+                  [disabled]="hunterImporting || !company.importable">
+                  Übernehmen
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <ng-template #noHunterPreviewResults>
+        <div class="kanban-empty">Keine Firmen gefunden</div>
+      </ng-template>
+    </section>
+
     <div class="loading" *ngIf="hunterLoading && !hunterImporting">
       <div class="spinner"></div>
-      <p>Lade Hunter-Leads...</p>
+      <p>Lade Firmen-Leads...</p>
     </div>
 
-    <section class="kanban-board" *ngIf="!hunterLoading || hunterImporting">
+    <section class="prospect-list-section" *ngIf="prospectViewMode === 'list' && (!hunterLoading || hunterImporting)">
+      <div class="prospect-list-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Firma</th>
+              <th>Branche</th>
+              <th>Kontakt</th>
+              <th>Ort</th>
+              <th>E-Mails</th>
+              <th>Status</th>
+              <th>Aktion</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let prospect of getProspectListLeads('hunter')" (click)="openProspectDetails(prospect)">
+              <td>
+                <strong>{{ prospect.companyName }}</strong>
+                <span *ngIf="prospect.domain">{{ prospect.domain }}</span>
+              </td>
+              <td>{{ prospect.category || '-' }}</td>
+              <td>
+                <a *ngIf="getPrimaryProspectEmail(prospect)" [href]="'mailto:' + getPrimaryProspectEmail(prospect)" (click)="$event.stopPropagation()">{{ getPrimaryProspectEmail(prospect) }}</a>
+                <a *ngIf="prospect.website" [href]="prospect.website" target="_blank" rel="noopener" (click)="$event.stopPropagation()">Website</a>
+              </td>
+              <td>{{ prospect.city || '-' }}</td>
+              <td>{{ getHunterEmailCount(prospect) }}</td>
+              <td>
+                <select [ngModel]="prospect.status" (ngModelChange)="changeProspectStatus(prospect, $event)" (click)="$event.stopPropagation()">
+                  <option *ngFor="let option of prospectStatuses" [value]="option.id">{{ option.label }}</option>
+                </select>
+              </td>
+              <td>
+                <button type="button" class="btn-small-save" (click)="$event.stopPropagation(); openProspectDetails(prospect)">Details</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="kanban-empty" *ngIf="getProspectListLeads('hunter').length === 0">Keine Einträge</div>
+      </div>
+    </section>
+
+    <section class="kanban-board" *ngIf="prospectViewMode === 'kanban' && (!hunterLoading || hunterImporting)">
       <div
         class="kanban-column"
         *ngFor="let status of prospectStatuses"
@@ -420,32 +617,29 @@
           class="prospect-card"
           *ngFor="let prospect of getProspectLeadsByStatus('hunter', status.id)"
           cdkDrag
-          [cdkDragData]="prospect">
+          [cdkDragData]="prospect"
+          (click)="openProspectDetails(prospect)">
           <div class="prospect-card-header">
             <h3>{{ prospect.companyName }}</h3>
-            <button class="btn-icon-danger" (click)="deleteProspectLead(prospect)" title="Löschen">×</button>
+            <button class="btn-icon-danger" (click)="$event.stopPropagation(); deleteProspectLead(prospect)" title="Löschen">×</button>
           </div>
           <p class="prospect-category">{{ prospect.category }}</p>
           <p class="prospect-meta" *ngIf="prospect.city">{{ prospect.city }}</p>
           <p class="prospect-address" *ngIf="prospect.domain">{{ prospect.domain }}</p>
           <p class="prospect-email" *ngIf="getPrimaryProspectEmail(prospect)">
-            <a [href]="'mailto:' + getPrimaryProspectEmail(prospect)">{{ getPrimaryProspectEmail(prospect) }}</a>
+            <a [href]="'mailto:' + getPrimaryProspectEmail(prospect)" (click)="$event.stopPropagation()">{{ getPrimaryProspectEmail(prospect) }}</a>
           </p>
           <div class="prospect-links">
-            <a *ngIf="prospect.website" [href]="prospect.website" target="_blank" rel="noopener">Website</a>
+            <a *ngIf="prospect.website" [href]="prospect.website" target="_blank" rel="noopener" (click)="$event.stopPropagation()">Website</a>
             <span>{{ getHunterEmailCount(prospect) }} E-Mails</span>
           </div>
-          <button
-            class="btn-small-save"
-            (click)="loadHunterEmails(prospect)"
-            [disabled]="loadingHunterEmailsId === prospect._id || !prospect.domain">
-            {{ loadingHunterEmailsId === prospect._id ? 'Lade...' : 'E-Mails laden' }}
-          </button>
+          <p class="prospect-open-hint">Details öffnen</p>
           <textarea
             [(ngModel)]="prospect.notes"
             rows="3"
-            placeholder="Notiz..."></textarea>
-          <button class="btn-small-save" (click)="saveProspectNotes(prospect)">Notiz speichern</button>
+            placeholder="Notiz..."
+            (click)="$event.stopPropagation()"></textarea>
+          <button class="btn-small-save" (click)="$event.stopPropagation(); saveProspectNotes(prospect)">Notiz speichern</button>
         </div>
 
         <div class="kanban-empty" *ngIf="getProspectLeadsByStatus('hunter', status.id).length === 0">
@@ -455,6 +649,61 @@
     </section>
   </div>
   <!-- END HUNTER TAB -->
+
+  <!-- PROSPECT DETAIL MODAL -->
+  <div class="modal-overlay prospect-detail-overlay" *ngIf="selectedProspectLead as prospect" (click)="closeProspectDetails()">
+    <div class="modal-content prospect-detail-modal" (click)="$event.stopPropagation()">
+      <div class="modal-header">
+        <div>
+          <h2>{{ prospect.companyName }}</h2>
+          <p>{{ prospect.source === 'google_places' ? 'Google Places' : 'Firmen-Suche' }}</p>
+        </div>
+        <button class="close-btn" (click)="closeProspectDetails()">×</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="prospect-detail-grid">
+          <div class="prospect-detail-row" *ngFor="let row of getProspectDetailRows(prospect)">
+            <span>{{ row.label }}</span>
+            <strong>{{ row.value }}</strong>
+          </div>
+        </div>
+
+        <div class="prospect-detail-actions">
+          <a *ngIf="prospect.phone" [href]="'tel:' + prospect.phone">Anrufen</a>
+          <a *ngIf="getPrimaryProspectEmail(prospect)" [href]="'mailto:' + getPrimaryProspectEmail(prospect)">E-Mail schreiben</a>
+          <a *ngIf="prospect.website" [href]="prospect.website" target="_blank" rel="noopener">Website öffnen</a>
+          <a *ngIf="prospect.metadata?.['googleMapsUri']" [href]="prospect.metadata?.['googleMapsUri']" target="_blank" rel="noopener">Maps öffnen</a>
+        </div>
+
+        <div class="prospect-detail-section">
+          <div class="prospect-detail-section-header">
+            <h3>E-Mails</h3>
+          </div>
+          <div class="prospect-email-list" *ngIf="getProspectEmails(prospect).length > 0; else noProspectEmails">
+            <div class="prospect-email-item" *ngFor="let email of getProspectEmails(prospect)">
+              <a [href]="'mailto:' + email.value">{{ email.value }}</a>
+              <span *ngIf="email.type">{{ email.type }}</span>
+              <span *ngIf="email.confidence !== null && email.confidence !== undefined">{{ email.confidence }}%</span>
+              <span *ngIf="email.position">{{ email.position }}</span>
+            </div>
+          </div>
+          <ng-template #noProspectEmails>
+            <p class="prospect-empty-detail">Noch keine E-Mail geladen.</p>
+          </ng-template>
+        </div>
+
+        <div class="prospect-detail-section">
+          <h3>Notizen</h3>
+          <textarea
+            [(ngModel)]="prospect.notes"
+            rows="4"
+            placeholder="Notiz..."></textarea>
+          <button class="btn-small-save" (click)="saveProspectNotes(prospect)">Notiz speichern</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
   <!-- BLOG TAB -->
   <div *ngIf="activeTab === 'blog'">
@@ -641,16 +890,45 @@
         <div class="form-group">
           <label>Inhalt (Absätze) *</label>
           <div class="paragraphs-editor">
-            <div class="paragraph-item" *ngFor="let paragraph of blogForm.fullContent; let i = index">
+            <div class="paragraph-item" *ngFor="let section of blogForm.fullContent; let i = index">
               <div class="paragraph-header">
-                <label>Absatz {{ i + 1 }}</label>
+                <label>Abschnitt {{ i + 1 }}</label>
                 <button type="button" class="btn-remove" (click)="removeParagraph(i)">✕</button>
               </div>
-              <textarea 
-                [(ngModel)]="blogForm.fullContent[i]" 
-                [name]="'paragraph' + i"
-                rows="4"
-                placeholder="Absatzinhalt..."></textarea>
+              <div class="rich-toolbar">
+                <button type="button" (mousedown)="$event.preventDefault()" (click)="formatBlogSection('bold')">B</button>
+                <button type="button" (mousedown)="$event.preventDefault()" (click)="formatBlogSection('italic')">I</button>
+                <button type="button" (mousedown)="$event.preventDefault()" (click)="formatBlogSection('insertUnorderedList')">Liste</button>
+                <button type="button" (mousedown)="$event.preventDefault()" (click)="formatBlogSection('formatBlock', 'h2')">H2</button>
+                <button type="button" (mousedown)="$event.preventDefault()" (click)="formatBlogSection('formatBlock', 'h3')">H3</button>
+                <button type="button" (mousedown)="$event.preventDefault()" (click)="formatBlogSection('formatBlock', 'p')">Text</button>
+              </div>
+
+              <div
+                class="rich-editor"
+                contenteditable="true"
+                [innerHTML]="section.html"
+                (input)="onBlogSectionInput(i, $event)"
+                (blur)="onBlogSectionInput(i, $event)"
+                data-placeholder="Abschnittstext schreiben...">
+              </div>
+
+              <div class="section-image-tools">
+                <label>Bild zu diesem Abschnitt</label>
+                <input
+                  type="file"
+                  accept="image/*"
+                  (change)="onBlogSectionImageSelect(i, $event)">
+                <input
+                  type="text"
+                  [(ngModel)]="section.alt"
+                  [name]="'sectionAlt' + i"
+                  placeholder="Alt-Text für das Bild">
+                <div class="section-image-preview" *ngIf="section.imageUrl || section.image">
+                  <img [src]="section.imageUrl || section.image" [alt]="section.alt || blogForm.title">
+                  <button type="button" class="btn-remove" (click)="removeBlogSectionImage(i)">Bild entfernen</button>
+                </div>
+              </div>
             </div>
             <button type="button" class="btn-add-paragraph" (click)="addParagraph()">
               ➕ Absatz hinzufügen

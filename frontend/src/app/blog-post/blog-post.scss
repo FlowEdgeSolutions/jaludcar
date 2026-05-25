@@ -132,12 +132,46 @@ $primary-color: #1a1a1a;
     color: $primary-color;
     font-size: 1.1rem;
     line-height: 1.8;
-    
-    p {
-      margin-bottom: 1.5rem;
-      
+
+    .post-section {
+      margin-bottom: 2rem;
+
       &:last-child {
         margin-bottom: 0;
+      }
+    }
+
+    .section-body {
+      h2,
+      h3,
+      p,
+      ul,
+      ol {
+        margin: 0 0 1.2rem;
+      }
+
+      h2,
+      h3 {
+        font-family: 'Space Grotesk', sans-serif;
+        line-height: 1.25;
+      }
+
+      ul,
+      ol {
+        padding-left: 1.5rem;
+      }
+    }
+
+    .section-image {
+      margin: 1.5rem 0 0;
+      border: 2px solid #000000;
+      overflow: hidden;
+
+      img {
+        width: 100%;
+        display: block;
+        aspect-ratio: 16 / 9;
+        object-fit: cover;
       }
     }
   }
