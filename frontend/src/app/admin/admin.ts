@@ -156,11 +156,12 @@ export class Admin implements OnInit, OnDestroy {
   private apiUrl = environment.apiUrl;
   private apiOrigin = this.apiUrl.replace(/\/api\/?$/, '');
   private readonly authRequestTimeoutMs = 15000;
+  private readonly sessionVerifyTimeoutMs = 4000;
   authEmail = '';
   authPassword = '';
   isAuthenticated = false;
   authLoading = false;
-  authReady = false;
+  authReady = true;
   authRestoring = false;
   authError = '';
   
@@ -263,6 +264,7 @@ export class Admin implements OnInit, OnDestroy {
 
   ngOnInit() {
     if (!isPlatformBrowser(this.platformId)) {
+      this.authReady = true;
       return;
     }
 
@@ -373,12 +375,23 @@ export class Admin implements OnInit, OnDestroy {
 
   private initAuth() {
     const saved = this.getStoredToken();
-    if (saved) {
-      this.verifyToken();
+    if (!saved) {
+      this.authReady = true;
       return;
     }
 
+    if (this.isTokenExpired(saved)) {
+      this.clearStoredToken();
+      this.authReady = true;
+      this.authError = 'Bitte einloggen';
+      return;
+    }
+
+    this.isAuthenticated = true;
     this.authReady = true;
+    this.authRestoring = true;
+    this.loadAdminData();
+    this.verifyToken(false);
   }
 
   private loadAdminData() {
@@ -396,6 +409,29 @@ export class Admin implements OnInit, OnDestroy {
     }
 
     return localStorage.getItem('jalud_admin_token') || '';
+  }
+
+  private clearStoredToken() {
+    if (isPlatformBrowser(this.platformId)) {
+      localStorage.removeItem('jalud_admin_token');
+    }
+  }
+
+  private isTokenExpired(token: string) {
+    try {
+      const payloadPart = token.split('.')[1];
+      if (!payloadPart) {
+        return true;
+      }
+
+      const normalized = payloadPart.replace(/-/g, '+').replace(/_/g, '/');
+      const padded = normalized.padEnd(normalized.length + ((4 - normalized.length % 4) % 4), '=');
+      const payload = JSON.parse(atob(padded));
+      const expiresAtMs = Number(payload?.exp || 0) * 1000;
+      return !expiresAtMs || expiresAtMs <= Date.now();
+    } catch {
+      return true;
+    }
   }
 
   private getAuthOptions() {
@@ -443,9 +479,7 @@ export class Admin implements OnInit, OnDestroy {
   }
 
   logout() {
-    if (isPlatformBrowser(this.platformId)) {
-      localStorage.removeItem('jalud_admin_token');
-    }
+    this.clearStoredToken();
     this.isAuthenticated = false;
     this.authReady = true;
     this.authRestoring = false;
@@ -463,28 +497,36 @@ export class Admin implements OnInit, OnDestroy {
     this.stats = { total: 0, neu: 0, kontaktiert: 0, abgeschlossen: 0, packages: [] };
   }
 
-  private verifyToken() {
-    this.authLoading = true;
+  private verifyToken(blocking = true) {
+    this.authLoading = blocking;
     this.authRestoring = true;
-    this.authReady = false;
+    this.authReady = true;
     this.http.get<{ success: boolean }>(`${this.apiUrl}/admin/me`, this.getAuthOptions())
-      .pipe(timeout(this.authRequestTimeoutMs))
+      .pipe(timeout(blocking ? this.authRequestTimeoutMs : this.sessionVerifyTimeoutMs))
       .subscribe({
       next: () => {
         this.isAuthenticated = true;
         this.authLoading = false;
         this.authRestoring = false;
         this.authReady = true;
-        this.loadAdminData();
+        if (blocking) {
+          this.loadAdminData();
+        }
       },
       error: (err) => {
         this.authLoading = false;
         this.authRestoring = false;
         this.authReady = true;
-        this.isAuthenticated = false;
-        this.authError = this.getSessionRestoreErrorMessage(err);
-        if (isPlatformBrowser(this.platformId) && (err?.status === 401 || err?.status === 403)) {
-          localStorage.removeItem('jalud_admin_token');
+        if (err?.status === 401 || err?.status === 403) {
+          this.clearStoredToken();
+          this.isAuthenticated = false;
+          this.authError = 'Bitte einloggen';
+          return;
+        }
+
+        if (blocking) {
+          this.isAuthenticated = false;
+          this.authError = this.getSessionRestoreErrorMessage(err);
         }
       }
     });
